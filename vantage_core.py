@@ -672,6 +672,33 @@ class CameraBase:
     def stop(self) -> None: ...
 
 
+CAMERA_STUCK_MSG = """
+The camera stopped sending pictures (look for "Remote I/O error" above). This is the camera
+hardware/driver, not this program. To recover:
+  1. Shut down (sudo shutdown now), UNPLUG the power for 10 seconds, then power on.
+     The camera only resets when it loses power - a normal restart is often not enough.
+  2. Re-seat the camera ribbon cable at both ends (contacts facing the right way, latch closed).
+  3. Test the camera on its own:  rpicam-hello -t 5s
+  4. If it keeps happening: check power with  vcgencmd get_throttled  (should print 0x0)
+     and the temperature with  vcgencmd measure_temp , and try running with --fast-sensor.
+"""
+
+
+def stop_camera_safely(picam2, log: logging.Logger) -> None:
+    """picam2.stop() waits forever on a camera that stopped responding; never hang on exit."""
+    def _close():
+        for fn in (picam2.stop, picam2.close):
+            try:
+                fn()
+            except Exception:  # noqa: BLE001
+                pass
+    t = threading.Thread(target=_close, name="camera-close", daemon=True)
+    t.start()
+    t.join(4.0)
+    if t.is_alive():
+        log.warning("The camera did not stop cleanly (not responding). Unplug the power for 10 s before the next run.")
+
+
 class IMX500Camera(CameraBase):
     """Raspberry Pi AI Camera. Detection runs on the sensor; we only post-process outputs."""
 
@@ -804,15 +831,8 @@ class IMX500Camera(CameraBase):
 
     def stop(self) -> None:
         if self.picam2 is not None:
-            try:
-                self.picam2.stop()
-            except Exception:  # noqa: BLE001
-                pass
-            try:
-                self.picam2.close()
-            except Exception:  # noqa: BLE001
-                pass
-            self.picam2 = None
+            cam, self.picam2 = self.picam2, None
+            stop_camera_safely(cam, LOG)
         self.status = "stopped"
 
 
@@ -1838,13 +1858,32 @@ class VantageApp:
         if self.speech:
             self.speech.say("Vantage ready", Priority.INFO, max_age_s=5.0)
 
+    def _camera_watchdog(self) -> None:
+        """If the camera stops delivering frames, explain why and exit instead of hanging."""
+        started = time.monotonic()
+        while not self.stop_event.wait(0.5):
+            last = self._last_frame_at
+            limit = 5.0 if last else 90.0   # first start uploads the network firmware (~1 min)
+            if time.monotonic() - (last or started) > limit:
+                if self.dashboard:
+                    self.dashboard.restore_terminal()
+                print(CAMERA_STUCK_MSG, file=sys.stderr, flush=True)
+                LOG.error("camera stopped delivering frames")
+                if self.speech:
+                    self.speech.say("Camera stopped working", Priority.CRITICAL, max_age_s=5)
+                time.sleep(3.0)
+                os._exit(3)
+
     def run(self) -> None:
         last_tracks: List[Track] = []
         deadline = self._t_start + self.cfg.duration_s if self.cfg.duration_s > 0 else None
+        self._last_frame_at = 0.0
+        threading.Thread(target=self._camera_watchdog, name="watchdog", daemon=True).start()
         while not self.stop_event.is_set():
             if deadline and time.monotonic() > deadline:
                 break
             frame, dets = self.camera.read()
+            self._last_frame_at = time.monotonic()
             if frame is None:
                 continue
             now = time.monotonic()

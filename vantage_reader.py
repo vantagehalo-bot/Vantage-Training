@@ -1211,6 +1211,33 @@ class ReaderVoice(threading.Thread):
 # Cameras
 # =============================================================================================
 
+CAMERA_STUCK_MSG = """
+The camera stopped sending pictures (look for "Remote I/O error" above). This is the camera
+hardware/driver, not the reader. To recover:
+  1. Shut down (sudo shutdown now), UNPLUG the power for 10 seconds, then power on.
+     The camera only resets when it loses power - a normal restart is often not enough.
+  2. Re-seat the camera ribbon cable at both ends (contacts facing the right way, latch closed).
+  3. Test the camera on its own:  rpicam-hello -t 5s
+  4. If it keeps happening: check power with  vcgencmd get_throttled  (should print 0x0)
+     and the temperature with  vcgencmd measure_temp , and try running with --fast-sensor.
+"""
+
+
+def stop_camera_safely(picam2, log: logging.Logger) -> None:
+    """picam2.stop() waits forever on a camera that stopped responding; never hang on exit."""
+    def _close():
+        for fn in (picam2.stop, picam2.close):
+            try:
+                fn()
+            except Exception:  # noqa: BLE001
+                pass
+    t = threading.Thread(target=_close, name="camera-close", daemon=True)
+    t.start()
+    t.join(4.0)
+    if t.is_alive():
+        log.warning("The camera did not stop cleanly (not responding). Unplug the power for 10 s before the next run.")
+
+
 class PiCamera:
     """The Raspberry Pi AI Camera (IMX500) used as a plain high-resolution camera."""
 
@@ -1322,12 +1349,8 @@ class PiCamera:
 
     def stop(self) -> None:
         if self.picam2 is not None:
-            for fn in (self.picam2.stop, self.picam2.close):
-                try:
-                    fn()
-                except Exception:  # noqa: BLE001
-                    pass
-            self.picam2 = None
+            cam, self.picam2 = self.picam2, None
+            stop_camera_safely(cam, LOG)
 
 
 # --- synthetic scenes (used by --simulate and --self-test) ------------------------------------
@@ -2173,7 +2196,7 @@ class ReaderApp:
     def start(self) -> None:
         LOG.info("Vantage reader %s | Tesseract %s | lang %s | voice %s via %s", __version__,
                  self.engine.version, self.cfg.lang, self.cfg.voice, self.voice.player or "espeak")
-        if not self.voice.enabled:
+        if self.cfg.audio_enabled and not self.voice.tts:
             LOG.warning("No speech: espeak-ng not found (sudo apt install espeak-ng)")
         self.voice.start()
         self.bt.start()
@@ -2188,12 +2211,28 @@ class ReaderApp:
         LOG.info("Keys: %s", HELP)
         self.voice.say("Reader ready." + ("" if self.auto else " Press space to read."))
 
+    def _camera_watchdog(self) -> None:
+        """If the camera stops delivering frames, explain why and exit instead of hanging."""
+        started = time.monotonic()
+        while not self.stop_event.wait(0.5):
+            last = self._last_frame_at
+            limit = 5.0 if last else 15.0          # the first frame can take a while
+            if time.monotonic() - (last or started) > limit:
+                LOG.error(CAMERA_STUCK_MSG)
+                self.voice.say("The camera stopped working. Please unplug the power for ten seconds.")
+                time.sleep(4.0)
+                self.keys.restore()
+                os._exit(3)
+
     def run(self) -> None:
         deadline = self._t_start + self.cfg.duration_s if self.cfg.duration_s > 0 else None
+        self._last_frame_at = 0.0
+        threading.Thread(target=self._camera_watchdog, name="watchdog", daemon=True).start()
         while not self.stop_event.is_set():
             if deadline and time.monotonic() > deadline:
                 break
             frame, md = self.camera.read()
+            self._last_frame_at = time.monotonic()
             small, thumb = self._tick(frame, md)
             if self.cfg.show_preview or self.streamer:
                 canvas = self._render(small, thumb, time.monotonic())
