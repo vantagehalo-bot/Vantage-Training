@@ -205,7 +205,7 @@ python3 vantage_reader.py --self-test      # check recognition quality on this P
 
 | Key | Action |
 |---|---|
-| SPACE / Enter | read now |
+| SPACE / Enter / left click | read now |
 | r | repeat |
 | p | pause / resume |
 | x | stop |
@@ -214,6 +214,49 @@ python3 vantage_reader.py --self-test      # check recognition quality on this P
 | a | auto on/off |
 | m | mute |
 | q | quit |
+
+### Zoom with a USB mouse
+
+Plug any USB mouse into the CM5. No setup is needed, and it works even when the preview
+window isn't the active window.
+
+| Mouse | Action |
+|---|---|
+| Scroll up / down | Zoom in / out (1× to 3×). The new level is spoken when you stop, e.g. "Zoom 2 times". |
+| Left click | Read now |
+| Right click | Stop reading, or repeat when nothing is playing |
+| Middle click | Back to 1× |
+
+Keyboard equivalents: `i` / `o` zoom, `0` resets.
+
+The zoom crops into the camera's full 12 MP sensor, so up to **2×** you get real extra
+detail, not just bigger pixels. The zoom label in the preview is green while it's
+lossless and turns orange above 2×. The reader also tells you when to zoom:
+- "Text looks small: scroll up to zoom in" appears on screen, and is spoken if a read
+  fails because the letters are too small.
+- "Text goes past the edge, scroll down to zoom out" is spoken before reading, and words
+  cut off by the frame edge are left out rather than read half.
+
+If the mouse isn't found, add yourself to the `input` group:
+`sudo usermod -aG input $USER`, then log out and back in. With `--mouse-grab`, the mouse
+only controls the reader and doesn't also move the desktop pointer.
+
+The full-sensor mode runs at about 10 fps, which is plenty for reading. `--fast-sensor`
+gives 30 fps, but zoom then only enlarges pixels.
+
+### Focus: the AI Camera has no autofocus
+
+If text is blurry while things farther away look sharp, the lens is focused too far away
+for reading. The lens has a manual focus ring; the camera came with a small tool for
+turning it.
+
+1. Run the reader with the preview open.
+2. Hold a page about 30 cm from the camera.
+3. Turn the ring slowly until the text looks crisp and the **sharp** meter is green.
+
+Obstacle detection still works fine with the lens set this close. If you ever need sharp
+text and sharp distance at the same time, add a Raspberry Pi Camera Module 3 (autofocus)
+on the second camera port for reading.
 
 ### How it works
 

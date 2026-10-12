@@ -49,6 +49,7 @@ import re
 import select
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import tempfile
@@ -56,7 +57,7 @@ import threading
 import time
 import unicodedata
 import wave
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -85,6 +86,14 @@ class ReaderConfig:
     width: int = 2028
     height: int = 1520
     rotate_180: bool = False
+    full_sensor: bool = True          # use the full 12 MP sensor so zoom keeps real detail
+
+    # --- zoom (mouse scroll wheel) ---
+    zoom_max: float = 3.0
+    zoom_step: float = 1.15           # per wheel notch
+    mouse: bool = True
+    mouse_devices: List[str] = dataclasses.field(default_factory=list)  # empty = auto-detect
+    mouse_grab: bool = False          # keep the mouse from also moving the desktop pointer
 
     # --- recognition ---
     lang: str = "eng"
@@ -713,6 +722,10 @@ def chunk_text(segment: str, max_len: int = 180) -> List[str]:
 # The recognition pipeline
 # =============================================================================================
 
+MSG_TOO_SMALL = "The text is too small. Move a little closer."
+MSG_ZOOM_IN = "The text is too small. Scroll up to zoom in, or move a little closer."
+
+
 @dataclasses.dataclass
 class Attempt:
     method: str
@@ -747,6 +760,7 @@ class OcrOutcome:
     layout_chars: int
     attempts: List[str]
     diagnosis: str = ""
+    cut_off: bool = False                   # text touches the frame edge (may continue outside)
 
     @property
     def text(self) -> str:
@@ -848,10 +862,33 @@ class OcrPipeline:
     def _outcome(self, best: Attempt, attempts: List[Attempt], frame: np.ndarray, sharp: float,
                  brightness: float, glare: float, prep0: Prepared, elapsed: float,
                  distance_cm: Optional[float]) -> OcrOutcome:
+        # Words touching the frame edge are usually cut in half ("orm had passed"): leave them
+        # out and tell the user to zoom out / move back instead.
+        H, W = frame.shape[:2]
+        m = 0.012 * W
+
+        def at_edge(w: Word) -> bool:
+            x, y, bw, bh = best.prep.to_source(w.box)
+            return x < m or y < m or x + bw > W - m or y + bh > H - m
+
+        cut_off = False
+        kept_paras: List[List[List[Word]]] = []
+        for para in best.paragraphs:
+            lines = []
+            for ln in para:
+                inside = [w for w in ln if not at_edge(w)]
+                cut_off |= len(inside) < len(ln)
+                if inside:
+                    lines.append(inside)
+            if lines:
+                kept_paras.append(lines)
+        if not kept_paras:          # everything touches the edge: better than nothing
+            kept_paras = best.paragraphs
+
         chunks: List[str] = []
         gaps: List[float] = []
         paras: List[List[str]] = []
-        for para in best.paragraphs:
+        for para in kept_paras:
             segs = compose_paragraph(para)
             # Tesseract sometimes starts a new paragraph in the middle of a sentence
             if (paras and segs and paras[-1] and segs[0][:1].islower()
@@ -867,7 +904,7 @@ class OcrPipeline:
                     last_piece = pi == len(pieces) - 1
                     gaps.append(0.0 if not last_piece else (0.25 if si < len(segs) - 1 else 0.45))
         words = [(w.text, w.conf, best.prep.to_source(w.box))
-                 for p in best.paragraphs for ln in p for w in ln]
+                 for p in kept_paras for ln in p for w in ln]
         ok = bool(chunks) and best.mean_conf >= self.cfg.min_read_conf
         # Plausibility: texture (bricks, fabric, noise) gives a few "words" out of lots of
         # character-like blobs, or words in a frame where no text was detected at all.
@@ -881,6 +918,7 @@ class OcrPipeline:
             prepared=best.image, sharpness=sharp, brightness=brightness, glare=glare,
             char_h=prep0.char_h, layout_lines=prep0.layout.n_lines, layout_chars=prep0.layout.n_chars,
             attempts=[f"{a.method}:{a.mean_conf:.0f}%/{a.n_words}w" for a in attempts])
+        out.cut_off = cut_off
         if not ok:
             out.diagnosis = self.diagnose(out, distance_cm)
         return out
@@ -897,7 +935,7 @@ class OcrPipeline:
         if o.sharpness < 0.12:
             return "The picture is blurry. Hold still, or move the text a little farther away."
         if 0 < o.char_h < 12:
-            return "The text is too small. Move a little closer."
+            return MSG_TOO_SMALL
         if o.chunks:
             return "I can only partly read this. Hold it straight and steady, in good light."
         return "I can see something like text, but can't read it. Hold it straight and steady, in good light."
@@ -1181,6 +1219,10 @@ class PiCamera:
         self.picam2 = None
         self.size = (cfg.width, cfg.height)
         self.name = "camera"
+        self.lossless_zoom = 1.0      # zoom you get before pixels are just enlarged
+        self._base_crop: Optional[Tuple[int, int, int, int]] = None
+        self._zoom = 1.0
+        self._zoom_dirty = False
 
     def start(self) -> None:
         try:
@@ -1211,10 +1253,21 @@ class PiCamera:
         extra = {}
         if self.cfg.rotate_180 and Transform is not None:
             extra["transform"] = Transform(hflip=1, vflip=1)
-        config = self.picam2.create_preview_configuration(
-            main={"size": self.size, "format": "RGB888"},  # BGR byte order: ready for OpenCV
-            buffer_count=3, **extra)
-        self.picam2.configure(config)
+        main = {"size": self.size, "format": "RGB888"}  # BGR byte order: ready for OpenCV
+        configured = False
+        full = tuple(self.picam2.camera_properties.get("PixelArraySize", (0, 0)))
+        if self.cfg.full_sensor and full[0] > self.size[0]:
+            # Read the whole 12 MP sensor (about 10 fps) and let the ISP scale it down. Zooming
+            # then crops real sensor pixels: 2x zoom on a 2028-wide output is still pixel-sharp.
+            try:
+                self.picam2.configure(self.picam2.create_preview_configuration(
+                    main=main, sensor={"output_size": full}, buffer_count=3, **extra))
+                configured = True
+                self.lossless_zoom = full[0] / self.size[0]
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Full-sensor mode not available (%s); using the default mode", exc)
+        if not configured:
+            self.picam2.configure(self.picam2.create_preview_configuration(main=main, buffer_count=3, **extra))
         self.picam2.start()
         self.size = tuple(self.picam2.camera_configuration()["main"]["size"])
         self.name = f"camera {num}"
@@ -1239,6 +1292,21 @@ class PiCamera:
         except Exception as exc:  # noqa: BLE001 - nice to have, never fatal
             LOG.warning("Could not set camera controls %s: %s", list(ctrls), exc)
 
+    def set_zoom(self, zoom: float) -> None:
+        self._zoom = zoom
+        self._zoom_dirty = True
+
+    def _apply_zoom(self) -> None:
+        bx, by, bw, bh = self._base_crop
+        w = int(bw / self._zoom) & ~1
+        h = int(bh / self._zoom) & ~1
+        crop = (bx + (bw - w) // 2, by + (bh - h) // 2, w, h)   # centred, same aspect ratio
+        try:
+            self.picam2.set_controls({"ScalerCrop": crop})
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Zoom failed: %s", exc)
+        self._zoom_dirty = False
+
     def read(self) -> Tuple[np.ndarray, dict]:
         req = self.picam2.capture_request()
         try:
@@ -1246,6 +1314,10 @@ class PiCamera:
             md = req.get_metadata()
         finally:
             req.release()
+        if self._base_crop is None and md.get("ScalerCrop"):
+            self._base_crop = tuple(int(v) for v in md["ScalerCrop"])  # the un-zoomed field of view
+        if self._zoom_dirty and self._base_crop:
+            self._apply_zoom()
         return frame, md
 
     def stop(self) -> None:
@@ -1366,6 +1438,11 @@ class SimCamera:
         self.noise = [self.rng.normal(0, 4, (H, W, 3)).astype(np.int16) for _ in range(3)]
         self._t0 = 0.0
         self._next = 0.0
+        self.zoom = 1.0
+        self.lossless_zoom = 1.0
+
+    def set_zoom(self, zoom: float) -> None:
+        self.zoom = zoom
 
     def start(self) -> None:
         self._t0 = time.monotonic()
@@ -1390,11 +1467,148 @@ class SimCamera:
                 img = cv2.GaussianBlur(img, (0, 0), 3.0 * (1.6 - t) + 0.3)
             else:
                 img = cv2.GaussianBlur(base, (0, 0), 0.6)
+        if self.zoom > 1.001:
+            W, H = self.size
+            w, h = int(W / self.zoom), int(H / self.zoom)
+            x, y = (W - w) // 2, (H - h) // 2
+            img = cv2.resize(img[y:y + h, x:x + w], (W, H), interpolation=cv2.INTER_LINEAR)
         noisy = np.clip(img.astype(np.int16) + self.noise[int(t * 12) % 3], 0, 255).astype(np.uint8)
         return noisy, {"ExposureTime": 16000, "AnalogueGain": 2.0}
 
     def stop(self) -> None:
         pass
+
+
+# =============================================================================================
+# USB mouse: scroll wheel = zoom, buttons = read / stop / reset zoom
+# =============================================================================================
+
+class MouseInput(threading.Thread):
+    """
+    Reads USB mice straight from /dev/input/event* (Linux evdev). No extra packages, works
+    whether or not the preview window has focus, and survives unplugging / re-plugging.
+    """
+
+    EV_KEY, EV_REL = 0x01, 0x02
+    REL_WHEEL = 0x08
+    BUTTONS = {0x110: "left", 0x111: "right", 0x112: "middle", 0x113: "side", 0x114: "extra"}
+    EVENT = struct.Struct("llHHi")       # struct input_event: timeval, type, code, value
+    EVIOCGRAB = 0x40044590
+
+    def __init__(self, on_scroll: Callable[[int], None], on_button: Callable[[str], None],
+                 stop_event: threading.Event, grab: bool = False, paths: Sequence[str] = ()):
+        super().__init__(name="mouse", daemon=True)
+        self.on_scroll = on_scroll
+        self.on_button = on_button
+        self.stop_event = stop_event
+        self.grab = grab
+        self.paths = list(paths)
+        self._fds: Dict[str, int] = {}
+        self._buf: Dict[int, bytes] = {}
+        self._warned = False
+        self.names: List[str] = []
+
+    @staticmethod
+    def find_mice() -> List[Tuple[str, str]]:
+        """(device path, name) of every input device the kernel lists as a mouse."""
+        try:
+            with open("/proc/bus/input/devices", encoding="utf-8", errors="ignore") as fh:
+                text = fh.read()
+        except OSError:
+            return []
+        mice = []
+        for block in text.split("\n\n"):
+            handlers = re.search(r"H: Handlers=([^\n]*)", block)
+            if not handlers:
+                continue
+            hs = handlers.group(1).split()
+            event = next((h for h in hs if h.startswith("event")), None)
+            if event and any(h.startswith("mouse") for h in hs):
+                name = re.search(r'N: Name="([^"]*)"', block)
+                mice.append(("/dev/input/" + event, name.group(1) if name else event))
+        return mice
+
+    def _open_new(self) -> None:
+        found = [(p, os.path.basename(p)) for p in self.paths] if self.paths else self.find_mice()
+        for path, name in found:
+            if path in self._fds:
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except PermissionError:
+                if not self._warned:
+                    self._warned = True
+                    LOG.warning("No permission to read the mouse (%s). Run:  sudo usermod -aG input $USER  "
+                                "then log out and back in.", path)
+                continue
+            except OSError:
+                continue
+            if self.grab:
+                try:
+                    import fcntl
+                    fcntl.ioctl(fd, self.EVIOCGRAB, 1)
+                except OSError:
+                    pass
+            self._fds[path] = fd
+            self.names.append(name)
+            LOG.info("Mouse: %s  (scroll = zoom, left = read, right = stop/repeat, middle = reset zoom)", name)
+
+    def _close(self, path: str) -> None:
+        fd = self._fds.pop(path, None)
+        if fd is not None:
+            self._buf.pop(fd, None)
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def _dispatch(self, data: bytes) -> None:
+        size = self.EVENT.size
+        wheel = 0
+        for i in range(len(data) // size):
+            _, _, etype, code, value = self.EVENT.unpack_from(data, i * size)
+            if etype == self.EV_REL and code == self.REL_WHEEL:
+                wheel += value                        # +1 per notch away from you
+            elif etype == self.EV_KEY and value == 1 and code in self.BUTTONS:
+                self.on_button(self.BUTTONS[code])
+        if wheel:
+            self.on_scroll(wheel)
+
+    def run(self) -> None:
+        next_scan = 0.0
+        while not self.stop_event.is_set():
+            now = time.monotonic()
+            if now >= next_scan:                       # pick up mice plugged in later
+                self._open_new()
+                next_scan = now + 2.0
+            if not self._fds:
+                self.stop_event.wait(0.5)
+                continue
+            try:
+                ready, _, _ = select.select(list(self._fds.values()), [], [], 0.25)
+            except (OSError, ValueError):
+                ready = []
+            for path, fd in list(self._fds.items()):
+                if fd not in ready:
+                    continue
+                try:
+                    data = os.read(fd, self.EVENT.size * 64)
+                except BlockingIOError:
+                    continue
+                except OSError:                        # unplugged
+                    LOG.info("Mouse disconnected: %s", path)
+                    self._close(path)
+                    continue
+                if not data:
+                    self._close(path)
+                    continue
+                data = self._buf.pop(fd, b"") + data
+                cut = len(data) - len(data) % self.EVENT.size
+                if cut < len(data):
+                    self._buf[fd] = data[cut:]
+                self._dispatch(data[:cut])
+        for path in list(self._fds):
+            self._close(path)
 
 
 # =============================================================================================
@@ -1441,7 +1655,8 @@ PREVIEW_W = 960      # analysis resolution for the live view
 DISPLAY_W = 640      # preview window: camera view width ...
 PANEL_W = 440        # ... plus the text panel
 FONT = cv2.FONT_HERSHEY_SIMPLEX if cv2 is not None else 0
-HELP = "SPACE read | r repeat | p pause | x stop | n/b next/back | +/- speed | a auto | m mute | q quit"
+HELP = ("SPACE/left-click read | scroll or i/o zoom | 0 or middle-click zoom 1x | r repeat | p pause | "
+        "x or right-click stop | n/b next/back | +/- speed | a auto | m mute | q quit")
 
 
 def conf_color(conf: float) -> Tuple[int, int, int]:
@@ -1524,6 +1739,8 @@ class ReaderApp:
         self.camera = SimCamera(cfg) if cfg.simulate else PiCamera(cfg)
         self.streamer = vc.MjpegStreamer(cfg.stream_port) if cfg.stream_port else None
         self.keys = TerminalKeys(self.handle_key, self.stop_event)
+        self.mouse = (MouseInput(self._on_scroll, self._on_mouse_button, self.stop_event,
+                                 grab=cfg.mouse_grab, paths=cfg.mouse_devices) if cfg.mouse else None)
         self.ocr_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
         self.fps = vc.RateMeter()
         self._lock = threading.Lock()
@@ -1560,6 +1777,12 @@ class ReaderApp:
         self._guidance_at = 0.0
         self._guidance_spoken_at = -1e9
         self._last_outcome_ok = True
+        # zoom
+        self.zoom = 1.0
+        self._zoom_steps = 0
+        self._zoom_reset = False
+        self._zoom_changed_at = 0.0
+        self._zoom_announced = True
 
     # -- key handling ----------------------------------------------------------------------------
 
@@ -1589,8 +1812,52 @@ class ReaderApp:
             self.voice.say("Auto reading on" if self.auto else "Auto reading off")
         elif k == "m":
             LOG.info("Audio %s", "muted" if self.voice.toggle_mute() else "unmuted")
+        elif k == "i":
+            self._on_scroll(+1)
+        elif k == "o":
+            self._on_scroll(-1)
+        elif k == "0":
+            self._zoom_reset = True
         elif k in ("q", "\x1b"):
             self.stop_event.set()
+
+    # -- mouse & zoom -----------------------------------------------------------------------------
+
+    def _on_scroll(self, notches: int) -> None:
+        with self._lock:
+            self._zoom_steps += notches
+
+    def _on_mouse_button(self, button: str) -> None:
+        if button == "left":
+            self._manual_request = True
+        elif button == "right":
+            if self.voice.busy:
+                self.voice.stop_reading()
+            else:
+                self._repeat()
+        elif button == "middle":
+            self._zoom_reset = True
+
+    def _update_zoom(self, now: float) -> None:
+        with self._lock:
+            steps, self._zoom_steps = self._zoom_steps, 0
+        reset, self._zoom_reset = self._zoom_reset, False
+        if steps or reset:
+            z = 1.0 if reset else self.zoom * (self.cfg.zoom_step ** steps)
+            z = float(np.clip(z, 1.0, max(1.0, self.cfg.zoom_max)))
+            if abs(z - self.zoom) > 1e-3:
+                self.zoom = z
+                self.camera.set_zoom(z)
+                self._zoom_changed_at = now
+                self._zoom_announced = False
+            return
+        # Once the wheel has stopped, say the new zoom (unless it would interrupt reading).
+        if not self._zoom_announced and now - self._zoom_changed_at > 0.8:
+            self._zoom_announced = True
+            LOG.info("Zoom %.1fx", self.zoom)
+            if not self.voice.busy:
+                level = f"{self.zoom:.1f}".rstrip("0").rstrip(".")
+                self.voice.say("Zoom off" if self.zoom < 1.05 else f"Zoom {level} times")
 
     def _repeat(self) -> None:
         with self._lock:
@@ -1669,6 +1936,8 @@ class ReaderApp:
         if self.cfg.save_debug:
             LOG.info("debug images: %s_*", save_debug(self.cfg.save_debug, o, "manual" if manual else "auto"))
         self._last_outcome_ok = o.ok
+        if o.diagnosis == MSG_TOO_SMALL and self.zoom < self.cfg.zoom_max - 0.05:
+            o.diagnosis = MSG_ZOOM_IN
         if not o.ok:
             self._fail_retries += 1
             # Auto mode stays quiet unless it keeps failing on something that clearly is text.
@@ -1683,7 +1952,13 @@ class ReaderApp:
         for i in indices:
             self._read_history.append((norm_for_compare(o.chunks[i]), now))
         prefix = "Not sure, but it says:" if o.mean_conf < self.cfg.sure_conf else ""
-        self.voice.play(self._items_for(o, indices, prefix))
+        items = self._items_for(o, indices, prefix)
+        if o.cut_off:
+            hint = ("Text goes past the edge, scroll down to zoom out." if self.zoom > 1.05
+                    else "Text goes past the edge, move back a little.")
+            items.insert(1 if items and items[0].cue == "lead" else 0, SpeechItem(text=hint, gap_s=0.2))
+            self._guidance, self._guidance_at = hint, now
+        self.voice.play(items)
 
     # -- per-frame logic -------------------------------------------------------------------------
 
@@ -1691,6 +1966,7 @@ class ReaderApp:
         now = time.monotonic()
         self.fps.tick(now)
         self._frame_no += 1
+        self._update_zoom(now)
         H, W = frame.shape[:2]
         small = cv2.resize(frame, (PREVIEW_W, int(PREVIEW_W * H / W)), interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
@@ -1779,6 +2055,9 @@ class ReaderApp:
         state = self._state_name(now)
         cv2.putText(view, f"READER [{'AUTO' if self.auto else 'MANUAL'}]  {state}", (8, 18), FONT, 0.52,
                     (255, 255, 255), 1, cv2.LINE_AA)
+        sharp_zoom = self.zoom <= getattr(self.camera, "lossless_zoom", 1.0) + 0.01
+        cv2.putText(view, f"ZOOM {self.zoom:.1f}x", (DISPLAY_W - 100, 18), FONT, 0.52,
+                    (80, 210, 80) if sharp_zoom else (0, 170, 255), 1, cv2.LINE_AA)
         if self._capturing or self._busy:
             cv2.rectangle(view, (0, 0), (DISPLAY_W - 1, h_disp - 1), (0, 200, 255), 4)
 
@@ -1801,9 +2080,12 @@ class ReaderApp:
 
         # bottom bar: guidance / exposure
         cv2.rectangle(view, (0, h_disp - 26), (DISPLAY_W, h_disp), (20, 20, 20), -1)
+        hint = self._live_hint(small.shape[1])
         if self._guidance and now - self._guidance_at < 8:
             cv2.putText(view, ascii_safe(self._guidance)[:80], (8, h_disp - 8), FONT, 0.45, (0, 200, 255), 1,
                         cv2.LINE_AA)
+        elif hint:
+            cv2.putText(view, hint, (8, h_disp - 8), FONT, 0.45, (0, 200, 255), 1, cv2.LINE_AA)
         else:
             bt = "BT headset" if self.bt.is_bluetooth else "audio: not Bluetooth"
             cv2.putText(view, f"{self.fps.rate:4.1f} fps  exp {self._exposure_ms:.0f} ms  {bt}  "
@@ -1812,6 +2094,21 @@ class ReaderApp:
         canvas[:h_disp, :DISPLAY_W] = view
         self._draw_panel(canvas, res, h_disp)
         return canvas
+
+    def _live_hint(self, small_w: int) -> str:
+        """On-screen zoom advice from the live text detection (not spoken)."""
+        lay = self._layout
+        if lay is None or lay.n_chars < 8 or self._busy or self._capturing:
+            return ""
+        letters_px = lay.char_h * self.camera.size[0] / small_w   # letter height in captured pixels
+        if 0 < letters_px < 14 and self.zoom < self.cfg.zoom_max - 0.05:
+            return "Text looks small - scroll up to zoom in"
+        m = 0.01 * small_w
+        H = small_w * self.camera.size[1] / self.camera.size[0]
+        if any(x < m or x + w > small_w - m or y < m or y + h > H - m for x, y, w, h in lay.boxes):
+            return "Text runs off the edge - scroll down to zoom out" if self.zoom > 1.05 else \
+                "Text runs off the edge - move back a little"
+        return ""
 
     def _draw_panel(self, canvas: np.ndarray, res: Optional[OcrOutcome], height: int) -> None:
         x0 = DISPLAY_W + 12
@@ -1886,6 +2183,8 @@ class ReaderApp:
             self.streamer.start()
         self.camera.start()
         self.keys.start()
+        if self.mouse is not None:
+            self.mouse.start()
         LOG.info("Keys: %s", HELP)
         self.voice.say("Reader ready." + ("" if self.auto else " Press space to read."))
 
@@ -1918,7 +2217,7 @@ class ReaderApp:
                 pass
         self.ocr_pool.shutdown(wait=True, cancel_futures=True)
         self.pipeline.pool.shutdown(wait=False, cancel_futures=True)
-        for th in (self.voice, self.bt, self.lidar, self.keys):
+        for th in (self.voice, self.bt, self.lidar, self.keys, self.mouse):
             if th is not None and th.is_alive():
                 th.join(timeout=2.0)
         if self._window_open:
@@ -2032,6 +2331,18 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> ReaderConfig:
     g.add_argument("--size", default=f"{d.width}x{d.height}",
                    help="capture size; 4056x3040 = full sensor, best for small print")
     g.add_argument("--rotate-180", action="store_true", help="camera is mounted upside down")
+    g.add_argument("--fast-sensor", dest="full_sensor", action="store_false",
+                   help="use the binned 2x2 sensor mode (30 fps) instead of the full 12 MP mode (~10 fps); "
+                        "zoom then only enlarges pixels")
+
+    g = p.add_argument_group("zoom (USB mouse)")
+    g.add_argument("--zoom-max", type=float, default=d.zoom_max, help="maximum zoom")
+    g.add_argument("--zoom-step", type=float, default=d.zoom_step, help="zoom change per wheel notch")
+    g.add_argument("--no-mouse", dest="mouse", action="store_false", help="don't use the mouse")
+    g.add_argument("--mouse-device", dest="mouse_devices", action="append", default=[], metavar="PATH",
+                   help="use this /dev/input/eventN device (default: every mouse found)")
+    g.add_argument("--mouse-grab", action="store_true",
+                   help="stop the mouse from also moving/clicking on the desktop while the reader runs")
 
     g = p.add_argument_group("recognition")
     g.add_argument("--lang", default=d.lang, help="Tesseract language(s), e.g. eng, eng+spa")
