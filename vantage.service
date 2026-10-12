@@ -1,0 +1,17 @@
+# systemd *user* unit for Vantage. Install with:
+#   cp vantage.service ~/.config/systemd/user/ && systemctl --user enable --now vantage
+# Adjust the path and the Bluetooth MAC below.
+[Unit]
+Description=Vantage assistive wearable core loop
+After=pipewire.service pipewire-pulse.service wireplumber.service
+
+[Service]
+WorkingDirectory=%h/Vantage-Training
+ExecStart=/usr/bin/python3 %h/Vantage-Training/vantage_core.py --headless --no-dashboard --stream-port 8080 --bt-mac XX:XX:XX:XX:XX:XX
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target
