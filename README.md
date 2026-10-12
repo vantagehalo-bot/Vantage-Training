@@ -176,6 +176,98 @@ journalctl --user -u vantage -f            # follow output
 This is a *user* service, so it can reach the PipeWire session and the Bluetooth
 headset.
 
+## 4. Text reader (`vantage_reader.py`)
+
+Point the camera at text (a book page, a medicine box, a sign, a screen) and the reader
+speaks it on the Shokz. It's a separate program from the obstacle detector, so the two
+never talk over each other. Only one program can use the camera at a time, so stop
+`vantage_core.py` before you start the reader.
+
+### Install (once)
+
+```bash
+sudo apt install -y tesseract-ocr tesseract-ocr-eng espeak-ng
+```
+
+Keep `vantage_reader.py` and `vantage_core.py` in the same folder. The reader reuses
+the Bluetooth and preview helpers from the core.
+
+### Run
+
+```bash
+python3 vantage_reader.py                  # automatic: hold text steady and it reads it
+python3 vantage_reader.py --manual         # reads only when you press SPACE
+python3 vantage_reader.py --headless --stream-port 8080   # over SSH: watch at http://<pi-ip>:8080
+python3 vantage_reader.py --self-test      # check recognition quality on this Pi
+```
+
+**Keys** work in the preview window, or in the terminal when there's no window:
+
+| Key | Action |
+|---|---|
+| SPACE / Enter | read now |
+| r | repeat |
+| p | pause / resume |
+| x | stop |
+| n / b | next / previous sentence |
+| + / - | faster / slower |
+| a | auto on/off |
+| m | mute |
+| q | quit |
+
+### How it works
+
+1. In auto mode it waits until it sees text and the camera has been still for 0.7 s.
+   It then plays a short "click" and captures 5 frames, keeping the sharpest one.
+2. It crops to the text area and removes noise in low light. It evens out the lighting,
+   so shadows and uneven light disappear, and corrects for white text on a dark sign.
+3. It resizes the text so letters are about 30 px tall, the size Tesseract reads best,
+   and straightens tilted text. Upside-down or sideways text is turned the right way up
+   automatically.
+4. It tries page, block and sign layouts and keeps whichever gives the most confident
+   result.
+5. It drops low-confidence words and junk lines, so texture like bricks or fabric isn't
+   read out as nonsense. If the overall confidence is borderline, it starts with "Not
+   sure, but it says…".
+6. It reads sentence by sentence, so it starts talking quickly and you can skip, go back
+   or pause. Lines it has already read aren't repeated. When you move along a page, only
+   the new lines are read.
+7. If it can't read something, it tells you why. For example: too dark, glare, blurry,
+   text too small, or too close (with `--lidar`).
+
+The preview shows:
+- the detected text lines, with live **sharp / light / steady** meters;
+- after reading, each recognised word boxed and colour-coded by confidence (green means
+  sure);
+- on the right, the full text with the sentence being spoken highlighted.
+
+### Getting the best results
+
+* Hold text **25–40 cm** from the camera, as flat and straight as you can. The AI
+  Camera has no autofocus, so very close text is blurry. Watch the "sharp" meter.
+* Good, even light helps more than anything else. Avoid shiny glare on glossy packaging.
+* For small print (medicine leaflets), use the full sensor resolution:
+  `--size 4056x3040`. It's slower but sees finer detail.
+* Other languages: `sudo apt install tesseract-ocr-spa`, then run with
+  `--lang eng+spa --voice es`.
+* Higher accuracy, but about 2× slower: download Tesseract's "best" model:
+  ```bash
+  mkdir -p ~/tessdata_best && cd ~/tessdata_best
+  wget https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata
+  cp /usr/share/tesseract-ocr/5/tessdata/osd.traineddata .
+  python3 ~/Vantage-Training/vantage_reader.py --tessdata ~/tessdata_best
+  ```
+
+### When something doesn't read right
+
+Run with `--save-debug debug/`. Every capture then saves the camera frame, the cleaned-up
+image Tesseract saw, an annotated result and a text file with each word's confidence.
+You can also test any photo directly:
+
+```bash
+python3 vantage_reader.py --image photo.jpg --save-debug debug/ --speak
+```
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -186,3 +278,6 @@ headset.
 | The first word gets clipped | That's the Bluetooth sink waking up. The beep starts with 150 ms of silence to cover it. Using `--no-beep` makes clipping more likely. |
 | Very slow first start | The network firmware uploads to the IMX500 on the first run, which takes about a minute. |
 | `No desktop display found` | Expected over SSH. Use `--stream-port 8080`. |
+| Reader: `Could not open camera` | `vantage_core.py` (or another camera program) is still running. Stop it first. |
+| Reader: reads only part of the text | Hold it steadier and closer, add light, or try `--size 4056x3040`. Use `--save-debug` to see what the camera captured. |
+| Reader: "Tesseract is not installed" | `sudo apt install tesseract-ocr tesseract-ocr-eng` |

@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 vantage.log*
+vantage_reader.log*
+debug/
