@@ -110,6 +110,18 @@ will also reconnect the headset when the connection drops.
 > **Don't run it with `sudo`.** Bluetooth audio runs in your user's PipeWire session.
 > Root can't reach it, and you'll get silence.
 
+## Hardware check (run this first)
+
+```bash
+python3 vantage_check.py            # system, camera, LiDAR, Bluetooth audio
+python3 vantage_check.py --ai       # also test the camera's object detector (~1 min first time)
+python3 vantage_check.py --only lidar --live   # live distance readout, Ctrl+C to stop
+```
+
+Each part gets PASS / WARN / FAIL with the most likely fix. The camera test saves
+`check_camera.jpg`, so you can see what the camera sees. It works over SSH; no desktop
+is needed.
+
 ## 2. Run it
 
 ```bash
