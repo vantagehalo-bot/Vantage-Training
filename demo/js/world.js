@@ -18,6 +18,7 @@ export class World {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.camera = new THREE.PerspectiveCamera(cfg.camVfovDeg, cfg.width / cfg.height, 0.05, 60);
     this.scene = null; this.def = null; this.props = []; this.actors = []; this.solids = [];
     this.player = { x: 0, z: 0, yaw: 0, pitch: 0, lookYaw: 0, lookPitch: 0 };
@@ -52,6 +53,11 @@ export class World {
     scene.fog = new THREE.Fog(lights.fog ?? 0x202020, 14, 30);
     scene.add(new THREE.HemisphereLight(lights.sky, lights.ground, lights.hemi));
     const sun = new THREE.DirectionalLight(lights.sun, lights.sunI); sun.position.set(...lights.sunPos); scene.add(sun);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
+    const b = def.bounds, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 6;
+    Object.assign(sun.shadow.camera, { left: -span / 2, right: span / 2, top: span / 2, bottom: -span / 2, near: 0.5, far: 40 });
+    sun.target.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2); scene.add(sun.target);
+    sun.position.set(sun.target.position.x + lights.sunPos[0] * 2, lights.sunPos[1] * 2, sun.target.position.z + lights.sunPos[2] * 2);
     scene.add(new THREE.AmbientLight(0xffffff, 0.15));
     for (const p of def.props) scene.add(p);
     this.props = def.props.filter(p => p.userData && (p.userData.label || p.userData.solid || p.userData.material));

@@ -6,14 +6,15 @@ import * as audio from "./audio.js";
 import { drawOverlay } from "./overlay.js";
 import { World } from "./world.js";
 import { SCENES, ORDER } from "./scenes.js";
-import { initReader } from "./reader.js";
+import { initLive } from "./live.js";
+import * as ai from "./ai.js";
 import { initInside } from "./inside.js";
 import { initHood } from "./hood.js";
 
 const $ = (id) => document.getElementById(id);
 const cfg = defaultConfig();
 const state = {
-  room: "wear", scene: "home", mode: "guide", trust: false, replay: null, haptics: true,
+  room: "start", scene: "home", mode: "guide", trust: false, replay: null, haptics: true,
   log: null, worldReady: false, sosSent: false,
 };
 
@@ -32,21 +33,28 @@ function onSpeechEvent(ev) {
 }
 
 // ------------------------------------------------------------------ rooms
-const rooms = ["wear", "walk", "read", "inside", "hood"];
-let reader = null, inside = null;
+const rooms = ["start", "walk", "live", "inside", "hood"];
+let live = null, inside = null;
 function showRoom(name) {
   for (const r of rooms) $(r).classList.toggle("active", r === name);
   document.querySelectorAll(".rooms button").forEach(b => b.classList.toggle("on", b.dataset.room === name));
   const prev = state.room; state.room = name;
-  if (prev === "read" && reader) reader.stop();
+  if (prev === "live" && live) live.stop();
   if (prev === "inside" && inside) inside.stop();
   if (name === "walk") { resizePanes(); if (!state.worldReady) loadScene(state.scene); }
-  if (name === "read") { if (!reader) reader = initReader({ video: $("cam"), overlay: $("readOverlay"), view: $("readView"), out: $("readOut"), status: $("readStatus"), meters: { sharp: $("mSharp"), light: $("mLight"), steady: $("mSteady") }, zoomLabel: $("zoomLabel"), buttons: { start: $("camStart"), now: $("readNow"), prev: $("readPrev"), pause: $("readPause"), next: $("readNext"), auto: $("readAuto") } }); reader.start(); }
+  if (name === "live") { if (!live) live = initLive({
+      video: $("liveCam"), overlay: $("liveOverlay"), startBtn: $("liveStart"), startNote: $("liveStartNote"), status: $("liveStatus"), torchBtn: $("torchBtn"), zoomLabel: $("zoomLabel"), meters: $("readMeters"),
+      modes: [...document.querySelectorAll("#live .modes button")], panels: [...document.querySelectorAll("#live .panel")],
+      det: { list: $("detList"), hazard: $("detHazard"), describe: $("detDescribe"), scene: $("detScene") },
+      ask: { chips: $("askChips"), form: $("askForm"), input: $("askInput"), mic: $("askMic"), log: $("askLog"), keyNote: $("askKeyNote") },
+      read: { out: $("readOut"), meters: { sharp: $("mSharp"), light: $("mLight"), steady: $("mSteady") }, buttons: { now: $("readNow"), prev: $("readPrev"), pause: $("readPause"), next: $("readNext"), auto: $("readAuto") } },
+    }, { cfg, pipeline, speech, hood });
+    live.start(); }
   if (name === "inside") { if (!inside) inside = initInside({ canvas: $("twin"), video: $("insideCam"), slider: $("explode"), card: { root: $("partCard"), title: $("cardTitle"), status: $("cardStatus"), line: $("cardLine"), detail: $("cardDetail"), spec: $("cardSpec"), close: $("cardClose"), img: $("cardImg") }, xray: $("xrayBtn"), reset: $("twinReset"), hint: $("insideHint"), labels: $("twinLabels"), list: $("twinList"), poster: $("poster"), posterBtn: $("posterBtn") }); inside.start(); }
   $("disclaimer").style.visibility = (name === "inside") ? "hidden" : "visible";
   if (name === "hood") hood.start(); else hood.stop();
 }
-document.querySelectorAll(".rooms button").forEach(b => b.addEventListener("click", () => { audio.prewarm(); showRoom(b.dataset.room); }));
+document.querySelectorAll("[data-room]").forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); audio.prewarm(); showRoom(b.dataset.room); }));
 
 // ------------------------------------------------------------------ WEAR
 $("beepBtn").addEventListener("click", () => {
@@ -73,6 +81,7 @@ function populateVoices() {
 if (window.speechSynthesis) { populateVoices(); speechSynthesis.onvoiceschanged = populateVoices; }
 $("rate").addEventListener("input", e => { const v = +e.target.value; $("rateVal").textContent = v; audio.setRateWpm(v); cfg.speechRate = v; });
 $("goWalk").addEventListener("click", () => { audio.prewarm(); showRoom("walk"); speech.say("Vantage ready", Priority.INFO, false, 5); });
+$("goLive").addEventListener("click", () => { audio.prewarm(); showRoom("live"); });
 
 // ------------------------------------------------------------------ WALK
 const worldCanvas = $("world"), haloCanvas = $("halo"), hctx = haloCanvas.getContext("2d");
@@ -113,14 +122,14 @@ window.addEventListener("resize", () => { if (state.room === "walk") resizePanes
 
 $("guideBtn").addEventListener("click", () => {
   state.mode = state.mode === "guide" ? "free" : "guide";
-  $("guideBtn").classList.toggle("on", state.mode === "guide");
+  $("guideBtn").classList.toggle("on", state.mode === "guide"); $("guideBtn").setAttribute("aria-pressed", state.mode === "guide");
   if (world) world.setMode(state.mode);
   setHint(state.mode === "guide" ? "Hold anywhere on the left to walk along the route." : "Left thumb is a joystick. Right thumb looks around.");
 });
-$("describeBtn").addEventListener("click", () => { cfg.describe = !cfg.describe; $("describeBtn").classList.toggle("on", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
+$("describeBtn").addEventListener("click", () => { cfg.describe = !cfg.describe; $("describeBtn").classList.toggle("on", cfg.describe); $("describeBtn").setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
 $("sceneBtn").addEventListener("click", () => pipeline.speakScene());
 $("muteBtn").addEventListener("click", toggleMute);
-function toggleMute() { const m = speech.toggleMute(); $("muteBtn").textContent = m ? "Muted" : "Sound on"; if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
+function toggleMute() { const m = speech.toggleMute(); $("muteBtn").textContent = m ? "Muted" : "Sound"; $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").classList.toggle("on", m); if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
 
 // SOS
 $("sosBtn").addEventListener("click", () => {
@@ -293,12 +302,19 @@ bind("sRepeat", "vRepeat", "criticalRepeatS", 0.1, v => v.toFixed(1)); bind("sTh
 bind("sOffset", "vOffset", "lidarOffsetXCm");
 $("sBeep").addEventListener("change", e => cfg.beep = e.target.checked);
 $("sHaptic").addEventListener("change", e => state.haptics = e.target.checked);
+// vision model key (kept on this device only)
+function keyState() { const k = ai.getKey(); $("sKeyState").textContent = k ? `Key saved on this device (…${k.slice(-4)}).` : "No key. Questions are answered from the on-device detector only."; if (live) live.refreshKey(); }
+$("sKey").value = ai.getKey(); keyState();
+$("sKey").addEventListener("change", e => { ai.setKey(e.target.value); keyState(); });
+$("sKey").addEventListener("input", e => { if (!e.target.value) { ai.setKey(""); keyState(); } });
+$("sModel").value = ai.getModel() === ai.MODEL_CHAIN[0] ? "" : ai.getModel();
+$("sModel").addEventListener("change", e => ai.setModel(e.target.value));
 $("settingsBtn").addEventListener("click", () => $("settings").hidden = !$("settings").hidden);
 $("settingsClose").addEventListener("click", () => $("settings").hidden = true);
 $("hoodOpen").addEventListener("click", () => { $("settings").hidden = true; showRoom("hood"); });
 $("hoodClose").addEventListener("click", () => showRoom("walk"));
 
 // ------------------------------------------------------------------ boot
-showRoom("wear");
+showRoom("start");
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, loadScene, showRoom };

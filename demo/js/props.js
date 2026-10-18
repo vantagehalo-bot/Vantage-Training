@@ -16,10 +16,32 @@ export const PALETTE = {
 };
 
 function box(w, h, d, m, x = 0, y = 0, z = 0) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); return mesh;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; return mesh;
 }
 function cyl(r, h, m, x = 0, y = 0, z = 0, seg = 14) {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), m); mesh.position.set(x, y, z); return mesh;
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), m); mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; return mesh;
+}
+/** A tiling surface drawn once into a canvas: planks, slabs or tiles. */
+function surface(kind, base) {
+  const c = document.createElement("canvas"); c.width = c.height = 512; const x = c.getContext("2d");
+  const col = "#" + base.toString(16).padStart(6, "0");
+  x.fillStyle = col; x.fillRect(0, 0, 512, 512);
+  const shade = (a) => `rgba(0,0,0,${a})`, light = (a) => `rgba(255,255,255,${a})`;
+  if (kind === "planks") {
+    for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? shade(0.08) : light(0.04); x.fillRect(0, i * 64, 512, 64); x.fillStyle = shade(0.35); x.fillRect(0, i * 64, 512, 2); x.fillRect((i * 173) % 512, i * 64, 2, 64); }
+    for (let i = 0; i < 400; i++) { x.fillStyle = shade(0.05 + 0.05 * ((i * 7) % 3)); x.fillRect((i * 97) % 512, (i * 53) % 512, 40 + (i * 13) % 90, 1); }
+  } else if (kind === "slabs") {
+    for (let i = 0; i <= 4; i++) { x.fillStyle = shade(0.4); x.fillRect(0, i * 128 - 1, 512, 3); x.fillRect(i * 128 - 1, 0, 3, 512); }
+    for (let i = 0; i < 1600; i++) { x.fillStyle = (i % 2 ? shade : light)(0.06); x.fillRect((i * 97) % 512, (i * 53) % 512, 2, 2); }
+  } else if (kind === "tiles") {
+    for (let i = 0; i <= 8; i++) { x.fillStyle = shade(0.3); x.fillRect(0, i * 64 - 1, 512, 2); x.fillRect(i * 64 - 1, 0, 2, 512); }
+    for (let i = 0; i < 64; i++) { x.fillStyle = (i % 3 ? light : shade)(0.03); x.fillRect((i % 8) * 64, Math.floor(i / 8) * 64, 64, 64); }
+  } else if (kind === "asphalt") {
+    for (let i = 0; i < 3000; i++) { x.fillStyle = (i % 2 ? shade : light)(0.07); x.fillRect((i * 97) % 512, (i * 53) % 512, 2, 2); }
+  } else if (kind === "grass") {
+    for (let i = 0; i < 2500; i++) { x.fillStyle = (i % 2 ? shade : light)(0.08); x.fillRect((i * 97) % 512, (i * 53) % 512, 1, 3 + (i % 4)); }
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 function group(label, conf, extra = {}) {
   const g = new THREE.Group();
@@ -129,8 +151,10 @@ export function glassDoor(w = 1.0, h = 2.1) {
 export function wall(w, h, d, color = PALETTE.wall) {
   const g = group(null, null); g.add(box(w, h, d, mat(color), 0, h / 2, 0)); return g;
 }
-export function floor(w, d, color = PALETTE.floor) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(color, { roughness: 0.95 })); m.rotation.x = -Math.PI / 2; m.userData.ground = true; return m;
+export function floor(w, d, color = PALETTE.floor, kind = "planks", tile = 1.2) {
+  const tex = surface(kind, color); tex.repeat.set(w / tile, d / tile);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 0.95 }));
+  m.rotation.x = -Math.PI / 2; m.userData.ground = true; m.receiveShadow = true; return m;
 }
 
 export function bollard() {

@@ -1,8 +1,8 @@
 // Offline cache: after one load the demo runs without the venue Wi-Fi.
-const VERSION = "vantage-lens-v2";
+const VERSION = "vantage-lens-v3";
 const PRECACHE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
-  "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js",
+  "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js", "js/live.js", "js/camera.js", "js/ai.js", "js/range.js", "js/ocr-prep.js", "js/detector.js",
   "vendor/three/three.module.js", "vendor/three/OrbitControls.js", "vendor/three/GLTFLoader.js", "vendor/three/utils/BufferGeometryUtils.js",
   "assets/halo-visor.glb", "assets/halo-poster.jpg", "assets/logo-mark.png", "assets/parts/part-ai-camera.png", "assets/parts/part-cm5.png", "assets/parts/part-lidar.png", "assets/parts/part-nano-base.png", "assets/parts/part-openmove.png", "assets/parts/part-tof.png",
   "vendor/tesseract/tesseract.min.js", "vendor/tesseract/worker.min.js", "vendor/tesseract/tesseract-core-simd-lstm.wasm.js", "vendor/tesseract/tesseract-core-lstm.wasm.js", "vendor/tesseract/eng.traineddata",
@@ -14,7 +14,11 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  const u = new URL(e.request.url);
+  if (e.request.method !== "GET") return;
+  if (u.hostname.endsWith("googleapis.com") && !u.hostname.startsWith("fonts.")) return;      // the model API is never cached
+  const sameOrigin = u.origin === location.origin, font = u.hostname === "fonts.googleapis.com" || u.hostname === "fonts.gstatic.com";
+  if (!sameOrigin && !font) return;
   e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
     const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return res;
   })));

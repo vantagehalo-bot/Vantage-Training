@@ -19,7 +19,7 @@ export function home({ shuffle = 0 } = {}) {
   const r = rng(shuffle); const j = (a) => (shuffle ? (r() - 0.5) * a : 0);
   const props = [], actors = [];
   // Room 7 x 6, player starts at the hallway end (z = +2.6) and walks toward the patio door at z = -2.9
-  props.push(P.floor(7, 6));
+  props.push(P.floor(7, 6, P.PALETTE.floor, "planks", 1.4));
   const wallH = 2.6;
   props.push(place(P.wall(7, wallH, 0.15), 0, -3.0));
   props.push(place(P.wall(7, wallH, 0.15), 0, 3.0));
@@ -62,9 +62,9 @@ export function home({ shuffle = 0 } = {}) {
 export function street({ shuffle = 0 } = {}) {
   const props = [], actors = [];
   // Pavement runs along z from +12 to -12, x in [-1.5, 1.5]; road to the +x side.
-  props.push(P.floor(3, 26, P.PALETTE.pavement));
-  const road = P.floor(8, 26, P.PALETTE.road); road.position.x = 5.5; props.push(road);
-  const grass = P.floor(4, 26, P.PALETTE.grass); grass.position.x = -3.5; props.push(grass);
+  props.push(P.floor(3, 26, P.PALETTE.pavement, "slabs", 1.0));
+  const road = P.floor(8, 26, P.PALETTE.road, "asphalt", 2.0); road.position.x = 5.5; props.push(road);
+  const grass = P.floor(4, 26, P.PALETTE.grass, "grass", 1.5); grass.position.x = -3.5; props.push(grass);
   props.push(place(P.kerb(26), 1.65, 0));
   // Building face on the left
   props.push(place(P.wall(0.3, 3.5, 26, 0xc8bfae), -5.6, 0));
@@ -103,7 +103,7 @@ export function street({ shuffle = 0 } = {}) {
 export function cafe({ shuffle = 0 } = {}) {
   const r = rng(shuffle); const j = (a) => (shuffle ? (r() - 0.5) * a : 0);
   const props = [], actors = [];
-  props.push(P.floor(8, 8, 0x6e5a48));
+  props.push(P.floor(8, 8, 0x8a7a6a, "tiles", 0.6));
   props.push(place(P.wall(8, 2.8, 0.15, 0xe3dccd), 0, -4.0)); props.push(place(P.wall(8, 2.8, 0.15, 0xe3dccd), 0, 4.0));
   props.push(place(P.wall(0.15, 2.8, 8, 0xe3dccd), -4.0, 0)); props.push(place(P.wall(0.15, 2.8, 8, 0xe3dccd), 4.0, 0));
   // Entrance glass door behind the start
