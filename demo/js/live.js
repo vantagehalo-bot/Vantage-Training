@@ -10,6 +10,8 @@ import { Reader } from "./reader.js";
 import { rangeCm } from "./range.js";
 import * as ai from "./ai.js";
 
+const LIVE_THRESHOLD = 0.32;   // EfficientDet-Lite0 scores sit lower than the device network's 0.55
+
 export function initLive(el, { cfg, pipeline, speech, hood }) {
   const { video, overlay, startBtn, startNote, status, modes, panels, det, ask, read, torchBtn, zoomLabel, meters } = el;
   const octx = overlay.getContext("2d");
@@ -103,7 +105,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     let beam = null, best = 0;
     for (const m of mapped) { const ov = HazardAssessor.overlapFrac(aim, m.box); if (ov > 0.25 && ov * m.score > best) { best = ov * m.score; beam = m; } }
     if (beam && beam.rangeCm != null) pipeline.pushLidar(beam.rangeCm, 1000, now); else pipeline.pushLidar(null, 0, now);
-    pipeline.step(dets ? mapped : null, now);
+    pipeline.step(dets ? mapped : null, now, LIVE_THRESHOLD);
     // carry the range onto the smoothed tracks for the overlay and the question context
     for (const t of pipeline.tracks) {
       const m = mapped.filter(x => x.label === t.label).sort((a, b) => dist2(a.box, t.box) - dist2(b.box, t.box))[0];
@@ -225,7 +227,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     start() { keyLine(); if (camera.running) setMode(st.mode, true); },
     stop() { stopDetectLoop(); reader.stop(); if (st.mode === "read") setZoom(1); },
     release() { this.stop(); camera.stop(); startBtn.parentElement.hidden = false; startBtn.disabled = false; },
-    refreshKey: keyLine, camera, reader,
+    refreshKey: keyLine, camera, reader, debug: () => ({ dets: st.lastDets, detector: st.detector && st.detector.name, state: st.detectorState }),
     get mode() { return st.mode; },
   };
 }

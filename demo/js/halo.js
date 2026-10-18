@@ -388,10 +388,10 @@ export class HaloPipeline {
     this.tracks = []; this.hazard = null; this.lidarSample = null;
   }
   pushLidar(rawCm, strength, now) { return this.lidar.push(rawCm, strength, now); }
-  step(detections, now) {
+  step(detections, now, threshold = this.cfg.scoreThreshold) {
     if (this._fpsT) this.fps = 0.9 * this.fps + 0.1 / Math.max(1e-3, now - this._fpsT);
     this._fpsT = now;
-    const dets = detections ? detections.filter(d => d.score >= this.cfg.scoreThreshold).slice(0, this.cfg.maxDetections) : [];
+    const dets = detections ? detections.filter(d => d.score >= threshold).slice(0, this.cfg.maxDetections) : [];
     this.tracks = this.tracker.update(dets, now);
     this.lidarSample = this.lidar.sample(now);
     this.hazard = this.assessor.assess(this.lidarSample, this.tracks);

@@ -1,0 +1,1 @@
+MediaPipe Tasks Vision 0.10.21 (Apache-2.0) and the EfficientDet-Lite0 float16 model from storage.googleapis.com/mediapipe-models, vendored for offline use.

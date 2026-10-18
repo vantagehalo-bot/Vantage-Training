@@ -104,14 +104,22 @@ export function explainError(e) {
 /** What the detector sees, as one line of context for the model, and as a spoken sentence. */
 export function describeDetections(tracks, hazard, frameW) {
   if (!tracks.length) return { line: "nothing recognised", spoken: "I don't recognise anything in front of you right now." };
-  const items = [...tracks].sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3]).slice(0, 5).map(t => {
-    const d = t.rangeCm != null ? `, about ${spokenDistance(t.rangeCm)}` : "";
-    const name = spokenLabel(t.label);
-    return `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name} ${directionOf(t.center[0], frameW)}${d}`;
+  // group the same thing in the same direction: "two people on your left, about 2 meters"
+  const groups = new Map();
+  for (const t of [...tracks].sort((a, b) => (a.rangeCm ?? 9e9) - (b.rangeCm ?? 9e9))) {
+    const key = `${t.label}|${directionOf(t.center[0], frameW)}`;
+    const g = groups.get(key) || { label: t.label, dir: directionOf(t.center[0], frameW), n: 0, near: null };
+    g.n++; if (g.near == null && t.rangeCm != null) g.near = t.rangeCm; groups.set(key, g);
+  }
+  const WORDS = ["", "one", "two", "three", "four", "five", "six"];
+  const items = [...groups.values()].slice(0, 5).map(g => {
+    const name = spokenLabel(g.label); const plural = g.label === "person" ? "people" : name + (/s$/.test(name) ? "" : "s");
+    const count = g.n === 1 ? `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}` : `${WORDS[g.n] || g.n} ${plural}`;
+    const d = g.near != null ? `, about ${spokenDistance(g.near)}` : "";
+    return `${count} ${g.dir}${d}`;
   });
   const line = items.join("; ");
-  const parts = items.map(i => i.replace(/, about /, " about "));
-  const spoken = parts.length === 1 ? `${parts[0][0].toUpperCase()}${parts[0].slice(1)}.` : `I can see ${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}.`;
+  const spoken = items.length === 1 ? `${items[0][0].toUpperCase()}${items[0].slice(1)}.` : `I can see ${items.slice(0, -1).join("; ")}; and ${items[items.length - 1]}.`;
   return { line, spoken };
 }
 

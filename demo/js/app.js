@@ -317,4 +317,4 @@ $("hoodClose").addEventListener("click", () => showRoom("walk"));
 // ------------------------------------------------------------------ boot
 showRoom("start");
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
-window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, loadScene, showRoom };
+window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, get live() { return live; }, loadScene, showRoom };

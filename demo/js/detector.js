@@ -1,73 +1,46 @@
-// detector.js — the on-device object detector for the Live room: COCO-80 classes, boxes in
-// video pixels, nothing leaves the tablet. MediaPipe's EfficientDet-Lite0 is the primary
-// (the same family of small mobile detectors as the Halo's on-sensor network); TF.js
-// COCO-SSD is the fallback when the MediaPipe runtime cannot start.
+// detector.js — the on-device object detector for the Live room: MediaPipe Tasks Vision
+// running EfficientDet-Lite0 (COCO-80) in wasm on the tablet. Nothing leaves the device.
+// Same family of small mobile detectors as the Halo's on-sensor network, same label set.
+// Measured here: ~330 ms to load, 90-160 ms a frame on a software CPU; faster on a real one.
+import { FilesetResolver, ObjectDetector } from "../vendor/mediapipe/vision_bundle.js";
 import { COCO_LABELS } from "./halo.js";
 
-const MP_BUNDLE = "vendor/mediapipe/vision_bundle.mjs", MP_WASM = "vendor/mediapipe/wasm", MP_MODEL = "vendor/mediapipe/efficientdet_lite0.tflite";
-const TF_SCRIPT = "vendor/tfjs/tf.min.js", TF_COCO = "vendor/tfjs/coco-ssd.min.js", TF_MODEL = "vendor/tfjs/coco-ssd/model.json";
+const WASM_DIR = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
+const MODEL = new URL("../vendor/mediapipe/efficientdet_lite0_float16.tflite", import.meta.url).href;
+const INPUT_W = 640;   // the model resizes to 320x320 internally; a smaller canvas saves the copy
 
-const normalise = (name) => {
-  const n = name.toLowerCase().replace(/_/g, " ").trim();
-  if (COCO_LABELS.includes(n)) return n;
-  const alias = { "motorbike": "motorcycle", "aeroplane": "airplane", "sofa": "couch", "pottedplant": "potted plant", "diningtable": "dining table", "tvmonitor": "tv", "cellphone": "cell phone", "hair dryer": "hair drier" };
-  return alias[n] || n;
-};
+const ALIAS = { "motorbike": "motorcycle", "aeroplane": "airplane", "sofa": "couch", "pottedplant": "potted plant", "diningtable": "dining table", "tvmonitor": "tv", "cellphone": "cell phone", "hair dryer": "hair drier" };
+const normalise = (name) => { const n = String(name || "").toLowerCase().replace(/_/g, " ").trim(); return COCO_LABELS.includes(n) ? n : (ALIAS[n] || n); };
 
-function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error(`could not load ${src}`)); document.head.appendChild(s); }); }
-
-async function loadMediaPipe(onProgress) {
+/**
+ * Load the detector. onProgress gets a short word for the status line.
+ * Returns { name, detect(video) -> [{label, score, box:[x,y,w,h] in video pixels}], close() }.
+ */
+export async function loadDetector({ onProgress = () => {}, scoreThreshold = 0.35, maxResults = 10, delegate = "CPU" } = {}) {
   onProgress("runtime");
-  const mod = await import(/* @vite-ignore */ new URL(MP_BUNDLE, location.href).href);
-  const { FilesetResolver, ObjectDetector } = mod;
-  const vision = await FilesetResolver.forVisionTasks(MP_WASM);
+  const fileset = await FilesetResolver.forVisionTasks(WASM_DIR);   // picks the SIMD or no-SIMD wasm pair
   onProgress("model");
-  let det = null, delegate = "GPU";
-  try {
-    det = await ObjectDetector.createFromOptions(vision, { baseOptions: { modelAssetPath: MP_MODEL, delegate: "GPU" }, runningMode: "VIDEO", scoreThreshold: 0.3, maxResults: 12 });
-  } catch (e) {
-    delegate = "CPU";
-    det = await ObjectDetector.createFromOptions(vision, { baseOptions: { modelAssetPath: MP_MODEL, delegate: "CPU" }, runningMode: "VIDEO", scoreThreshold: 0.3, maxResults: 12 });
-  }
+  const det = await ObjectDetector.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: MODEL, delegate },
+    runningMode: "VIDEO", scoreThreshold, maxResults,
+  });
+  const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   let lastTs = -1;
   return {
-    name: `MediaPipe EfficientDet-Lite0 (${delegate})`,
+    name: `EfficientDet-Lite0 (${delegate.toLowerCase()})`,
     async detect(video) {
-      let ts = Math.round(performance.now()); if (ts <= lastTs) ts = lastTs + 1; lastTs = ts;
-      const r = det.detectForVideo(video, ts);
-      return (r.detections || []).map(d => {
-        const c = d.categories && d.categories[0]; const b = d.boundingBox;
-        return c && b ? { label: normalise(c.categoryName || c.displayName || ""), score: c.score, box: [b.originX, b.originY, b.width, b.height] } : null;
+      const vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return [];
+      const s = Math.min(1, INPUT_W / vw);
+      const w = Math.round(vw * s), h = Math.round(vh * s);
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      ctx.drawImage(video, 0, 0, w, h);
+      const ts = Math.max(performance.now(), lastTs + 1); lastTs = ts;   // strictly increasing, in ms
+      const { detections } = det.detectForVideo(canvas, ts);           // synchronous, ~100 ms
+      return (detections || []).map(d => {
+        const c = d.categories && d.categories[0], b = d.boundingBox; if (!c || !b) return null;
+        return { label: normalise(c.categoryName || c.displayName), score: c.score, box: [b.originX / s, b.originY / s, b.width / s, b.height / s] };
       }).filter(Boolean);
     },
     close() { try { det.close(); } catch (_) {} },
   };
-}
-
-async function loadTfjs(onProgress) {
-  onProgress("runtime");
-  if (!window.tf) await loadScript(TF_SCRIPT);
-  if (!window.cocoSsd) await loadScript(TF_COCO);
-  try { await window.tf.setBackend("webgl"); } catch (_) { await window.tf.setBackend("cpu"); }
-  await window.tf.ready();
-  onProgress("model");
-  const model = await window.cocoSsd.load({ base: "lite_mobilenet_v2", modelUrl: TF_MODEL });
-  return {
-    name: `TF.js COCO-SSD (${window.tf.getBackend()})`,
-    async detect(video) {
-      const r = await model.detect(video, 12, 0.3);
-      return r.map(d => ({ label: normalise(d.class), score: d.score, box: d.bbox.slice() }));
-    },
-    close() { try { model.dispose(); } catch (_) {} },
-  };
-}
-
-/** Load whichever detector is available. onProgress gets a short word for the status line. */
-export async function loadDetector({ onProgress = () => {} } = {}) {
-  const errors = [];
-  for (const [name, loader] of [["mediapipe", loadMediaPipe], ["tfjs", loadTfjs]]) {
-    try { const d = await loader(onProgress); onProgress("ready"); return d; }
-    catch (e) { errors.push(`${name}: ${e.message || e}`); }
-  }
-  throw new Error(errors.join("; "));
 }
