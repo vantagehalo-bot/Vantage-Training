@@ -12,7 +12,7 @@ export const COACH = {
   close: "The text is too close. Move it a little farther away.",
   blur: "The picture is blurry. Hold still, or move the text a little farther away.",
   small: "The text is too small. Pinch to zoom in, or move a little closer.",
-  none: "I can't see any text. Point the camera at a page or a sign.",
+  none: "No text in frame.",
 };
 
 export class Reader {
@@ -29,7 +29,7 @@ export class Reader {
 
   ensureWorker() {
     const st = this.st; if (st.workerReady) return st.workerReady;
-    this.setStatus("Loading the reader…");
+    this.setStatus("LOADING READER");
     st.workerReady = (async () => {
       if (!window.Tesseract) await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "vendor/tesseract/tesseract.min.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
       const base = new URL("vendor/tesseract/", location.href).href;
@@ -99,7 +99,7 @@ export class Reader {
   async capture({ viaModel = true } = {}) {
     const st = this.st; if (st.busy || !this.camera.running) return;
     st.busy = true; this.onBusy(true); st.lastRead = performance.now() / 1000;
-    audio.click(); this.setStatus("Reading…");
+    audio.click(); this.setStatus("READING");
     try {
       // a photo-pipeline still where the browser offers one, else the sharpest of a short burst
       const stillCanvas = await this.camera.still(2600);
@@ -134,14 +134,14 @@ export class Reader {
     const st = this.st;
     const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
     const fresh = lines.filter(l => !st.readLines.has(norm(l)));
-    if (!fresh.length) { this.setStatus("Nothing new on this page."); return; }
+    if (!fresh.length) { this.setStatus("NOTHING NEW ON THIS PAGE"); return; }
     fresh.forEach(l => st.readLines.add(norm(l)));
     st.sentences = splitSentences(fresh.join("\n"));
     if (!st.sentences.length) { this.coach(); return; }
     const unsure = conf < MIN_CONF;
     this.render(unsure); st.cur = -1; st.paused = false;
     if (unsure) this.say("Not sure, but it says...", () => this.speakFrom(0)); else this.speakFrom(0);
-    this.setStatus(`${st.sentences.length} sentence${st.sentences.length === 1 ? "" : "s"} · ${source === "model" ? "read by the vision model" : `on-device, confidence ${Math.round(conf)}%`}`);
+    this.setStatus(`${st.sentences.length} SENTENCE${st.sentences.length === 1 ? "" : "S"} · ${source === "model" ? "VISION MODEL" : `ON-DEVICE · ${Math.round(conf)} %`}`);
   }
   coach() {
     const m = this.st.metrics; let key = "none";
@@ -172,7 +172,7 @@ export class Reader {
     });
     b.next.addEventListener("click", () => { if (st.sentences.length) { st.paused = false; this.speakFrom(Math.min(st.sentences.length - 1, st.cur + 1)); } });
     b.prev.addEventListener("click", () => { if (st.sentences.length) { st.paused = false; this.speakFrom(Math.max(0, st.cur - 1)); } });
-    b.auto.addEventListener("click", () => { st.auto = !st.auto; b.auto.classList.toggle("on", st.auto); b.auto.setAttribute("aria-pressed", st.auto); this.setStatus(st.auto ? "Auto: I read when the picture is steady." : "Manual: tap Read now."); });
+    b.auto.addEventListener("click", () => { st.auto = !st.auto; b.auto.classList.toggle("on", st.auto); b.auto.setAttribute("aria-pressed", st.auto); this.setStatus(st.auto ? "AUTO · READS WHEN THE PICTURE IS STEADY" : "MANUAL · TAP READ NOW"); });
   }
   setZoomLabel(z) { if (!this.zoomLabel) return; this.zoomLabel.textContent = `${z % 1 ? z.toFixed(1) : z}×`; this.zoomLabel.classList.toggle("lossy", z > 2); }
   start() { const st = this.st; if (st.running) return; st.running = true; st.prevGray = null; st.steadySince = performance.now() / 1000; this.analyse(); }

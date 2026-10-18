@@ -13,7 +13,7 @@ import * as ai from "./ai.js";
 const LIVE_THRESHOLD = 0.32;   // EfficientDet-Lite0 scores sit lower than the device network's 0.55
 
 export function initLive(el, { cfg, pipeline, speech, hood }) {
-  const { video, overlay, startBtn, startNote, status, modes, panels, det, ask, read, torchBtn, zoomLabel, meters } = el;
+  const { video, overlay, startBtn, startNote, status, modes, panels, det, ask, read, torchBtn, zoomLabel, meters, side } = el;
   const octx = overlay.getContext("2d");
   const camera = new Camera(video);
   const st = { mode: "obstacles", running: false, detector: null, detectorState: "idle", loop: 0, lastDets: [], frameW: cfg.width, frameH: cfg.height,
@@ -33,7 +33,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   // ------------------------------------------------------------ camera lifecycle
   async function startCamera() {
     audio.prewarm();
-    startBtn.disabled = true; startNote.textContent = "Opening the camera…";
+    startBtn.disabled = true; startNote.textContent = "Opening";
     try {
       await camera.start();
       startBtn.parentElement.hidden = true;
@@ -46,7 +46,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     }
   }
   startBtn.addEventListener("click", startCamera);
-  torchBtn.addEventListener("click", async () => { const on = !torchBtn.classList.contains("on"); if (await camera.setTorch(on)) torchBtn.classList.toggle("on", on); });
+  torchBtn.addEventListener("click", async () => { const on = !torchBtn.classList.contains("on"); if (await camera.setTorch(on)) { torchBtn.classList.toggle("on", on); torchBtn.setAttribute("aria-pressed", on); } });
 
   // ------------------------------------------------------------ modes
   function setMode(mode, force = false) {
@@ -57,8 +57,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     if (meters) meters.hidden = mode !== "read" || !camera.running;
     if (prev === "read") { reader.stop(); setZoom(1); }
     if (!camera.running) return;
-    if (mode === "read") { stopDetectLoop(); octx.clearRect(0, 0, overlay.width, overlay.height); reader.start(); status.textContent = "Hold the text steady. I read when the picture is sharp."; }
-    else { startDetectLoop(); status.textContent = mode === "ask" ? "Tap a question, or type one." : "Looking…"; }
+    if (mode === "read") { stopDetectLoop(); octx.clearRect(0, 0, overlay.width, overlay.height); reader.start(); status.textContent = "HOLD STEADY · READING STARTS WHEN THE PICTURE IS SHARP"; }
+    else { startDetectLoop(); status.textContent = mode === "ask" ? "TAP A QUESTION OR TYPE ONE" : "LOOKING"; }
   }
   modes.forEach(b => b.addEventListener("click", () => { audio.prewarm(); setMode(b.dataset.mode); }));
 
@@ -66,13 +66,13 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   async function ensureDetector() {
     if (st.detector) return st.detector;
     if (st.detectorState === "loading") return null;
-    st.detectorState = "loading"; status.textContent = "Loading the detector…";
+    st.detectorState = "loading"; status.textContent = "LOADING DETECTOR";
     try {
       const mod = await import("./detector.js");
-      st.detector = await mod.loadDetector({ onProgress: (p) => { status.textContent = `Loading the detector… ${p}`; } });
-      st.detectorState = "ready"; status.textContent = "Looking…";
+      st.detector = await mod.loadDetector({ onProgress: (p) => { status.textContent = `LOADING DETECTOR · ${p.toUpperCase()}`; } });
+      st.detectorState = "ready"; status.textContent = "LOOKING";
       return st.detector;
-    } catch (e) { st.detectorState = "failed"; status.textContent = `Detector unavailable: ${e.message}`; return null; }
+    } catch (e) { st.detectorState = "failed"; status.textContent = `DETECTOR UNAVAILABLE · ${e.message}`; return null; }
   }
   function startDetectLoop() { if (st.running) return; st.running = true; pipeline.reset(); detectTick(); }
   function stopDetectLoop() { st.running = false; cancelAnimationFrame(st.loop); }
@@ -124,16 +124,20 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     const v = viewRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (overlay.width !== Math.round(v.W * dpr) || overlay.height !== Math.round(v.H * dpr)) { overlay.width = Math.round(v.W * dpr); overlay.height = Math.round(v.H * dpr); }
     octx.save(); octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, v.W, v.H);
-    drawOverlay(octx, v.W, v.H, { tracks: pipeline.tracks, hazard: pipeline.hazard, lidarSample: pipeline.lidarSample, speech, cfg, fps: pipeline.fps },
+    // the panel floats over the right of the stage in landscape: keep the HUD out from under it
+    let hudW = v.W;
+    if (side) { const sr = overlay.getBoundingClientRect(), ar = side.getBoundingClientRect(); if (ar.left < sr.right - 8 && ar.top < sr.bottom && ar.bottom > sr.top) hudW = Math.max(240, ar.left - sr.left - 16); }
+    drawOverlay(octx, hudW, v.H, { tracks: pipeline.tracks, hazard: pipeline.hazard, lidarSample: pipeline.lidarSample, speech, cfg, fps: pipeline.fps },
       { haptics: true, view: { x: v.x, y: v.y, w: v.w, h: v.h }, live: true, quiet: st.mode === "ask", bottomInset: 40 });
     octx.restore();
   }
   function updateDetList() {
     if (!det.list) return;
     const items = [...pipeline.tracks].sort((a, b) => (a.rangeCm ?? 9999) - (b.rangeCm ?? 9999)).slice(0, 6);
-    det.list.innerHTML = items.length ? items.map(t => `<li><b>${spokenLabel(t.label)}</b><span>${t.rangeCm != null ? `~${(t.rangeCm / 100).toFixed(1)} m` : "—"}</span><em>${t.score.toFixed(2)}</em></li>`).join("") : '<li class="muted">Nothing recognised yet.</li>';
-    det.hazard.textContent = pipeline.hazard && pipeline.hazard.message ? pipeline.hazard.message : "Clear";
-    det.hazard.dataset.level = pipeline.hazard ? pipeline.hazard.level : 0;
+    det.list.innerHTML = items.length ? items.map(t => `<li><b>${spokenLabel(t.label)}</b><span>${t.rangeCm != null ? `${(t.rangeCm / 100).toFixed(1)} m` : "—"}</span><em>${t.score.toFixed(2)}</em></li>`).join("") : '<li class="muted">Nothing in range.</li>';
+    const hz = pipeline.hazard; const dist = hz && hz.distanceCm != null ? ` ${(hz.distanceCm / 100).toFixed(1)} m` : "";
+    det.hazard.textContent = !hz || hz.level === Level.UNKNOWN ? "NO RANGE" : hz.level === Level.CRITICAL ? `TOO CLOSE${dist}` : hz.level === Level.CAUTION ? `AHEAD${dist}` : "CLEAR";
+    det.hazard.dataset.level = hz ? hz.level : 0;
   }
   det.describe.addEventListener("click", () => { cfg.describe = !cfg.describe; det.describe.classList.toggle("on", cfg.describe); det.describe.setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
   det.scene.addEventListener("click", () => pipeline.speakScene());
@@ -141,16 +145,16 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   // ------------------------------------------------------------ ask
   function renderChips() {
     ask.chips.innerHTML = "";
-    for (const q of ai.QUESTIONS) {
-      const b = document.createElement("button"); b.className = "chip"; b.textContent = q.text; b.dataset.id = q.id;
-      b.addEventListener("click", () => askQuestion(q));
+    ai.QUESTIONS.forEach((q, i) => {
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = q.text; b.dataset.id = q.id; b.dataset.n = String(i + 1);
+      b.addEventListener("click", () => { ask.chips.querySelectorAll(".chip").forEach(c => c.classList.remove("last")); b.classList.add("last"); askQuestion(q); });
       ask.chips.appendChild(b);
-    }
+    });
   }
   renderChips();
   function keyLine() {
     const has = !!ai.getKey();
-    ask.keyNote.textContent = has ? "Answers come from Google's Gemini on its free tier. One frame leaves the tablet per question, and Google may use free-tier requests to improve its products." : "No key yet: answers come from the on-device detector. Add a free Gemini key in Settings for real answers.";
+    ask.keyNote.textContent = has ? "Answers come from Google's Gemini on its free tier. One frame leaves the tablet per question; Google may use free-tier requests to improve its products." : "No vision key. Answers come from the on-device detector; add a Gemini key in Settings for scene answers.";
     ask.keyNote.classList.toggle("warn", !has);
   }
   keyLine();
@@ -158,9 +162,9 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     if (st.asking) return;
     const text = typeof q === "string" ? q : q.text;
     if (!camera.running) { addTurn(text, "Open the camera first."); return; }
-    if (q.mode === "read" || /^read\b/i.test(text)) { setMode("read"); setTimeout(() => reader.capture(), 350); addTurn(text, "Reading…", { pending: true }); return; }
+    if (q.mode === "read" || /^read\b/i.test(text)) { setMode("read"); setTimeout(() => reader.capture(), 350); addTurn(text, "READING", { pending: true }); return; }
     const key = ai.getKey();
-    const turn = addTurn(text, key ? "Looking…" : "", { pending: true });
+    const turn = addTurn(text, key ? "LOOKING" : "", { pending: true });
     st.asking = turn;
     try {
       const context = ai.describeDetections(pipeline.tracks, pipeline.hazard, cfg.width).line;
@@ -169,17 +173,17 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
         const detail = !!(q.detail);
         const frame = await camera.jpeg(detail ? 1024 : 768, detail ? 0.75 : 0.65);
         const r = await ai.ask({ key, question: text, frame, context, detail });
-        answer = r.text; meta = `${r.model.replace("gemini-", "")} · ${(r.ms / 1000).toFixed(1)} s`;
+        answer = r.text; meta = `${r.model.replace("gemini-", "GEMINI ").replace(/-/g, " ")} · ${(r.ms / 1000).toFixed(1)} s`;
       } else {
-        answer = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg }) || "I can answer that with a vision key. Add a free Gemini key in Settings.";
-        meta = "on-device";
+        answer = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg }) || "That needs the vision model. Add a free Gemini key in Settings.";
+        meta = "ON-DEVICE";
       }
       setTurn(turn, answer, meta);
       speech.say(answer, Priority.INFO, false, 30);
     } catch (e) {
       const why = ai.explainError(e);
       const fallback = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg });
-      setTurn(turn, fallback ? `${fallback}` : `I couldn't reach the model: ${why}.`, fallback ? `on-device (model: ${why})` : "");
+      setTurn(turn, fallback ? `${fallback}` : `Model unavailable: ${why}.`, fallback ? `ON-DEVICE · MODEL ${why.toUpperCase()}` : "");
       if (fallback) speech.say(fallback, Priority.INFO, false, 30);
     } finally { st.asking = null; }
   }
@@ -197,7 +201,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   if (SR && !standalone) {
     ask.mic.hidden = false;
     let rec = null, silence = 0, heard = "", listening = false;
-    const stopListening = () => { listening = false; clearTimeout(silence); ask.mic.classList.remove("on"); ask.input.placeholder = "Ask anything about what's in front of you"; };
+    const stopListening = () => { listening = false; clearTimeout(silence); ask.mic.classList.remove("on"); ask.input.placeholder = "Or type a question"; };
     ask.mic.addEventListener("click", () => {
       if (listening) { try { rec.stop(); } catch (_) {} return; }
       rec = rec || new SR(); rec.lang = "en-US"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -214,7 +218,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     });
   } else ask.mic.hidden = true;
   if (standalone) ask.keyNote.textContent += " Open this page in Safari itself, not from the Home Screen, for voice questions.";
-  camera.onMute = (m) => { if (m) status.textContent = "Camera paused by the system. It resumes on its own."; else status.textContent = st.mode === "read" ? "Hold the text steady." : "Looking…"; };
+  camera.onMute = (m) => { if (m) status.textContent = "CAMERA PAUSED BY THE SYSTEM · IT RESUMES ON ITS OWN"; else status.textContent = st.mode === "read" ? "HOLD STEADY" : "LOOKING"; };
 
   // ------------------------------------------------------------ pinch zoom (read mode)
   const pts = new Map(); const stage = overlay.parentElement;

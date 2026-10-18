@@ -194,7 +194,7 @@ export function initInside(el) {
     const h = document.createElement("li"); h.className = "twin-list-head"; h.textContent = group === "visor" ? "Sensor Visor" : "Compute Pack"; list.appendChild(h);
     for (const p of parts.filter(p => p.def.group === group)) {
       const li = document.createElement("li"); li.innerHTML = `<span class="dot ${p.def.status}"></span>${p.def.title}`;
-      li.addEventListener("click", () => { select(p); if (explode < 0.4) { slider.value = 700; explode = 0.7; layout(); } });
+      li.addEventListener("click", () => { select(p); if (explode < 0.4) { slider.value = 700; slider.dispatchEvent(new Event("input", { bubbles: true })); } });
       p.li = li; list.appendChild(li);
     }
   }
@@ -232,14 +232,14 @@ export function initInside(el) {
     lastExplode = explode;
   });
   reset.addEventListener("click", () => { camera.position.copy(HOME); controls.target.set(0, -0.09, 0); slider.value = 0; explode = 0; lastExplode = 0; layout(); select(null); });
-  posterBtn.addEventListener("click", () => { poster.hidden = !poster.hidden; posterBtn.classList.toggle("on", !poster.hidden); });
-  poster.addEventListener("click", () => { poster.hidden = true; posterBtn.classList.remove("on"); });
+  posterBtn.addEventListener("click", () => { poster.hidden = !poster.hidden; posterBtn.classList.toggle("on", !poster.hidden); posterBtn.setAttribute("aria-pressed", !poster.hidden); });
+  poster.addEventListener("click", () => { poster.hidden = true; posterBtn.classList.remove("on"); posterBtn.setAttribute("aria-pressed", "false"); });
 
   // "Hold over the model": the tablet camera behind the twin, so the parts can be lined up on the real Halo
   let stream = null;
   xray.addEventListener("click", async () => {
-    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.hidden = true; xray.classList.remove("on"); return; }
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); video.srcObject = stream; await video.play(); video.hidden = false; xray.classList.add("on"); }
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.hidden = true; xray.classList.remove("on"); xray.setAttribute("aria-pressed", "false"); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); video.srcObject = stream; await video.play(); video.hidden = false; xray.classList.add("on"); xray.setAttribute("aria-pressed", "true"); }
     catch (_) { hint.hidden = false; hint.textContent = "Camera not available here; the twin works without it."; }
   });
 

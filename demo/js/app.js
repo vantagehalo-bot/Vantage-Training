@@ -43,7 +43,7 @@ function showRoom(name) {
   if (prev === "inside" && inside) inside.stop();
   if (name === "walk") { resizePanes(); if (!state.worldReady) loadScene(state.scene); }
   if (name === "live") { if (!live) live = initLive({
-      video: $("liveCam"), overlay: $("liveOverlay"), startBtn: $("liveStart"), startNote: $("liveStartNote"), status: $("liveStatus"), torchBtn: $("torchBtn"), zoomLabel: $("zoomLabel"), meters: $("readMeters"),
+      video: $("liveCam"), overlay: $("liveOverlay"), startBtn: $("liveStart"), startNote: $("liveStartNote"), status: $("liveStatus"), torchBtn: $("torchBtn"), zoomLabel: $("zoomLabel"), meters: $("readMeters"), side: $("liveSide"),
       modes: [...document.querySelectorAll("#live .modes button")], panels: [...document.querySelectorAll("#live .panel")],
       det: { list: $("detList"), hazard: $("detHazard"), describe: $("detDescribe"), scene: $("detScene") },
       ask: { chips: $("askChips"), form: $("askForm"), input: $("askInput"), mic: $("askMic"), log: $("askLog"), keyNote: $("askKeyNote") },
@@ -58,13 +58,13 @@ document.querySelectorAll("[data-room]").forEach(b => b.addEventListener("click"
 
 // ------------------------------------------------------------------ WEAR
 $("beepBtn").addEventListener("click", () => {
-  audio.prewarm(); audio.beep(() => { $("beepOk").hidden = false; });
+  audio.prewarm(); audio.beep(() => { $("beepYes").hidden = false; });
 });
-$("beepYes").addEventListener("click", () => { $("stepBeep").classList.add("done"); });
+$("beepYes").addEventListener("click", () => { $("stepBeep").classList.add("done"); $("beepYes").hidden = true; });
 
 function populateVoices() {
   const vs = audio.listVoices(); const box = $("voices"); box.innerHTML = "";
-  if (!vs.length) { box.innerHTML = '<span class="dim">Using the system voice.</span>'; return; }
+  if (!vs.length) { box.innerHTML = '<span class="dim">System voice.</span>'; return; }
   // prefer a few distinct, natural-sounding voices
   const pick = []; const seen = new Set();
   const pref = /Samantha|Daniel|Karen|Moira|Google UK English|Google US English|Microsoft (Aria|Guy|Sonia)|Natural|Premium|Enhanced/i;
@@ -90,7 +90,7 @@ function ensureWorld() {
   if (!world) {
     world = new World(worldCanvas, cfg);
     world.onBump = (p) => { if (state.log) state.log.bumps.push({ t: state.log.clock(), label: p.userData.label || "obstacle" }); audio.haptic(30); };
-    world.onRailEnd = () => { if (!state.trust) setHint("End of the walk. Pick another place, or go by ear."); };
+    world.onRailEnd = () => { if (!state.trust) setHint("End of the route. Pick another place, or go by ear."); };
   }
   return world;
 }
@@ -103,7 +103,7 @@ function loadScene(id, { shuffle = 0 } = {}) {
   state.worldReady = true;
   $("sceneTitle").textContent = def.title;
   document.querySelectorAll("#sceneChips button").forEach(b => b.classList.toggle("on", b.dataset.scene === id));
-  setHint(state.mode === "guide" ? "Hold anywhere on the left to walk. Drag on the right to look." : "Left thumb: walk. Right thumb: look.");
+  setHint(state.mode === "guide" ? "Hold left to walk. Drag right to look." : "Left thumb walks. Right thumb looks.");
   hood.setScene(def);
 }
 document.querySelectorAll("#sceneChips button").forEach(b => b.addEventListener("click", () => loadScene(b.dataset.scene)));
@@ -124,20 +124,20 @@ $("guideBtn").addEventListener("click", () => {
   state.mode = state.mode === "guide" ? "free" : "guide";
   $("guideBtn").classList.toggle("on", state.mode === "guide"); $("guideBtn").setAttribute("aria-pressed", state.mode === "guide");
   if (world) world.setMode(state.mode);
-  setHint(state.mode === "guide" ? "Hold anywhere on the left to walk along the route." : "Left thumb is a joystick. Right thumb looks around.");
+  setHint(state.mode === "guide" ? "Hold left to follow the route." : "Left thumb walks. Right thumb looks.");
 });
 $("describeBtn").addEventListener("click", () => { cfg.describe = !cfg.describe; $("describeBtn").classList.toggle("on", cfg.describe); $("describeBtn").setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
 $("sceneBtn").addEventListener("click", () => pipeline.speakScene());
 $("muteBtn").addEventListener("click", toggleMute);
-function toggleMute() { const m = speech.toggleMute(); $("muteBtn").textContent = m ? "Muted" : "Sound"; $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").classList.toggle("on", m); if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
+function toggleMute() { const m = speech.toggleMute(); $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").setAttribute("aria-label", m ? "Sound off" : "Sound on"); $("muteBtn").classList.toggle("on", m); if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
 
 // SOS
 $("sosBtn").addEventListener("click", () => {
   $("sos").hidden = false; state.sosSent = true;
   const p = world ? world.getPose() : { x: 0, z: 0 };
-  $("sosLine").textContent = `SOS sent 25.2048° N, 55.2708° E · ${new Date().toLocaleTimeString()}`;
+  $("sosLine").textContent = `SENT ${new Date().toLocaleTimeString([], { hour12: false })} · 25.2048 N, 55.2708 E`;
   speech.say("SOS sent. Your location has been shared with your contact.", Priority.CRITICAL, true, 6);
-  setTimeout(() => { $("sosLine").textContent += " · Joshua has seen it"; }, 3500);
+  setTimeout(() => { $("sosLine").textContent += " · SEEN BY YOUR CONTACT"; }, 3500);
 });
 $("sosClose").addEventListener("click", () => $("sos").hidden = true);
 
@@ -249,7 +249,7 @@ function startTrust() {
   loadScene(state.scene, { shuffle: Math.floor(Math.random() * 1e6) + 1 });
   state._prevMode = prevMode;
   $("blackout").hidden = false; $("replay").hidden = true;
-  $("blackoutText").textContent = "Steer to the door at the far end. Listen.";
+  $("blackoutText").textContent = "Screen off. Find the door at the far end by sound.";
   speech.say("By ear. Find the door.", Priority.INFO, false, 6);
 }
 $("finishTrust").addEventListener("click", () => finishTrust("You stopped here."));
@@ -266,17 +266,17 @@ function openReplay(L, reason) {
   world.frozen = true;
   const dur = L.poses[L.poses.length - 1].t;
   const crit = L.speech.filter(s => s.prio === Priority.CRITICAL).length;
-  $("replaySummary").textContent = `${reason} ${Math.round(dur)} s by ear · ${L.speech.length} messages, ${crit} critical · ${L.bumps.length} contact${L.bumps.length === 1 ? "" : "s"}. Scrub to see what the Halo saw at each moment.`;
+  $("replaySummary").textContent = `${reason} ${Math.round(dur)} s by ear · ${L.speech.length} messages, ${crit} critical · ${L.bumps.length} contact${L.bumps.length === 1 ? "" : "s"}. Scrub to see what the Halo saw.`;
   const tl = $("timeline"); tl.innerHTML = "";
   const items = [...L.speech.map(s => ({ ...s, kind: "speech" })), ...L.bumps.map(b => ({ ...b, kind: "bump" }))].sort((a, b) => a.t - b.t);
   for (const it of items) {
     const li = document.createElement("li"); li.dataset.t = it.t;
     if (it.kind === "bump") { li.className = "bump"; li.innerHTML = `<span class="t">${it.t.toFixed(1)}s</span>contact with ${it.label}`; }
     else { li.className = it.prio === 0 ? "crit" : it.prio === 1 ? "warn" : ""; li.innerHTML = `<span class="t">${it.t.toFixed(1)}s</span><b>${priorityName(it.prio)}</b> ${it.text}`; }
-    li.addEventListener("click", () => { $("scrub").value = Math.round(it.t / dur * 1000); });
+    li.addEventListener("click", () => { $("scrub").value = Math.round(it.t / dur * 1000); syncRange($("scrub")); });
     tl.appendChild(li);
   }
-  $("scrub").value = 0; $("replay").hidden = false;
+  $("scrub").value = 0; syncRange($("scrub")); $("replay").hidden = false;
   replayPipeline.reset();
 }
 function renderReplay() {
@@ -309,9 +309,14 @@ $("sKey").addEventListener("change", e => { ai.setKey(e.target.value); keyState(
 $("sKey").addEventListener("input", e => { if (!e.target.value) { ai.setKey(""); keyState(); } });
 $("sModel").value = ai.getModel() === ai.MODEL_CHAIN[0] ? "" : ai.getModel();
 $("sModel").addEventListener("change", e => ai.setModel(e.target.value));
-$("settingsBtn").addEventListener("click", () => $("settings").hidden = !$("settings").hidden);
-$("settingsClose").addEventListener("click", () => $("settings").hidden = true);
-$("hoodOpen").addEventListener("click", () => { $("settings").hidden = true; showRoom("hood"); });
+function openSettings(open) { $("settings").hidden = !open; $("scrim").hidden = !open; }
+$("settingsBtn").addEventListener("click", () => openSettings($("settings").hidden));
+$("settingsClose").addEventListener("click", () => openSettings(false));
+$("scrim").addEventListener("click", () => openSettings(false));
+// range tracks fill to their value
+export function syncRange(r) { const min = +r.min || 0, max = +r.max || 100; r.style.setProperty("--p", `${((+r.value - min) / (max - min) * 100).toFixed(1)}%`); }
+document.querySelectorAll("input[type=range]").forEach(r => { r.addEventListener("input", () => syncRange(r)); syncRange(r); });
+$("hoodOpen").addEventListener("click", () => { openSettings(false); showRoom("hood"); });
 $("hoodClose").addEventListener("click", () => showRoom("walk"));
 
 // ------------------------------------------------------------------ boot

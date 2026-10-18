@@ -103,7 +103,7 @@ export function explainError(e) {
 
 /** What the detector sees, as one line of context for the model, and as a spoken sentence. */
 export function describeDetections(tracks, hazard, frameW) {
-  if (!tracks.length) return { line: "nothing recognised", spoken: "I don't recognise anything in front of you right now." };
+  if (!tracks.length) return { line: "nothing recognised", spoken: "Nothing recognised in front of you." };
   // group the same thing in the same direction: "two people on your left, about 2 meters"
   const groups = new Map();
   for (const t of [...tracks].sort((a, b) => (a.rangeCm ?? 9e9) - (b.rangeCm ?? 9e9))) {
@@ -119,7 +119,8 @@ export function describeDetections(tracks, hazard, frameW) {
     return `${count} ${g.dir}${d}`;
   });
   const line = items.join("; ");
-  const spoken = items.length === 1 ? `${items[0][0].toUpperCase()}${items[0].slice(1)}.` : `I can see ${items.slice(0, -1).join("; ")}; and ${items[items.length - 1]}.`;
+  const joined = items.length === 1 ? items[0] : `${items.slice(0, -1).join("; ")}; and ${items[items.length - 1]}`;
+  const spoken = `${joined[0].toUpperCase()}${joined.slice(1)}.`;
   return { line, spoken };
 }
 
@@ -129,7 +130,7 @@ export function localAnswer(q, { tracks, hazard, frameW, cfg }) {
   if (kind === "scene") return describeDetections(tracks, hazard, frameW).spoken;
   if (kind === "people") {
     const n = tracks.filter(t => t.label === "person").length;
-    if (!n) return "I can't see anyone in front of you.";
+    if (!n) return "No one in front of you.";
     const near = tracks.filter(t => t.label === "person").map(t => t.rangeCm).filter(v => v != null).sort((a, b) => a - b)[0];
     return `${n === 1 ? "One person" : n + " people"} in front of you${near != null ? `, the nearest about ${spokenDistance(near)}` : ""}.`;
   }

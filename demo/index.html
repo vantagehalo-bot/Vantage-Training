@@ -11,10 +11,19 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%23ece8e1%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23f0a830%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Mono:wght@200..800&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+<svg hidden aria-hidden="true">
+  <symbol id="i-sound" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18 6.5a7.6 7.6 0 0 1 0 11"/></symbol>
+  <symbol id="i-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></symbol>
+  <symbol id="i-torch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v4l-2 3v11h-2V10L9 7z"/><path d="M4.5 6.5l2 1.5M19.5 6.5l-2 1.5M12 1v1.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
 
 <header class="top">
   <a class="brand" href="#" data-room="start"><img src="assets/logo-mark.png" alt="" class="eye"><span>Vantage <b>Halo</b></span></a>
@@ -25,8 +34,8 @@
     <button data-room="inside">Inside</button>
   </nav>
   <div class="tools">
-    <button id="muteBtn" class="icon-btn" aria-pressed="false" title="Mute">Sound</button>
-    <button id="settingsBtn" class="icon-btn" title="Settings">Settings</button>
+    <button id="muteBtn" class="icon-btn" aria-pressed="false" aria-label="Sound on"><svg class="when-off"><use href="#i-sound"/></svg><svg class="when-on"><use href="#i-muted"/></svg></button>
+    <button id="settingsBtn" class="icon-btn" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
   </div>
 </header>
 
@@ -36,34 +45,34 @@
 <section id="start" class="room active">
   <div class="start-wrap">
     <div class="start-lead">
-      <p class="eyebrow">Vantage Vision Halo</p>
-      <h1>Put the headset on.<br>Hold the tablet like a window.</h1>
-      <p class="lede">For the next few minutes this tablet is the Halo. You hear what a wearer hears and see what the device sees. Nothing here is a mock-up: the voice, the thresholds and the words are the firmware's own.</p>
+      <p class="label">Vantage Vision Halo · V2</p>
+      <h1>The Halo, on a tablet.</h1>
+      <p class="lede">Put the headset on and hold the tablet at eye height. You will hear what a wearer hears, in the firmware's own words and timing, and see what the sensor sees.</p>
       <ol class="start-steps">
         <li class="step" id="stepBeep">
           <div class="step-body">
             <h3>Headset check</h3>
-            <p>Every critical alert on the Halo starts with two short tones, so it is felt before the words arrive.</p>
+            <p>Critical alerts start with two short tones. Make sure you feel them.</p>
             <div class="row">
-              <button class="primary" id="beepBtn">Play the tones</button>
-              <span class="confirm" id="beepOk" hidden>Felt it? <button class="secondary" id="beepYes">Yes</button></span>
+              <button class="secondary" id="beepBtn">Play tones</button>
+              <button class="secondary" id="beepYes" hidden>Felt them</button>
             </div>
           </div>
         </li>
         <li class="step" id="stepVoice">
           <div class="step-body">
-            <h3>Choose the voice</h3>
+            <h3>Voice</h3>
             <div class="voices" id="voices"></div>
-            <label class="rate">Speech rate <input type="range" id="rate" min="120" max="260" value="175"> <output id="rateVal">175</output> words a minute</label>
+            <label class="field rate"><span>Speech rate</span><output id="rateVal">175</output><span class="unit">wpm</span><input type="range" id="rate" min="120" max="260" value="175"></label>
           </div>
         </li>
         <li class="step" id="stepGo">
           <div class="step-body">
-            <h3>Begin</h3>
-            <p>Abdullah is going out for a coffee. Walk with him, then point the camera at the room you are in.</p>
+            <h3>Go</h3>
+            <p>Abdullah is walking to the café. Go with him, or point the camera at this room.</p>
             <div class="row">
-              <button class="primary big" id="goWalk">Start the walk</button>
-              <button class="secondary big" id="goLive">Use the camera</button>
+              <button class="primary big" id="goWalk">Walk with Abdullah</button>
+              <button class="secondary big" id="goLive">Open camera</button>
             </div>
           </div>
         </li>
@@ -81,14 +90,12 @@
   <div class="panes">
     <div class="pane left" id="paneLeft">
       <canvas id="world"></canvas>
-      <div class="pane-label">Sighted view</div>
+      <div class="hud-label">Sighted · <span id="sceneTitle"></span></div>
       <div class="joy" id="joy"><div class="knob"></div></div>
-      <div class="hint" id="walkHint">Hold to walk</div>
-      <div class="scene-title" id="sceneTitle"></div>
+      <div class="hint" id="walkHint">Hold left to walk</div>
     </div>
     <div class="pane right" id="paneRight">
       <canvas id="halo"></canvas>
-      <div class="pane-label accent">Halo view</div>
     </div>
   </div>
   <div class="bar walkbar">
@@ -98,22 +105,23 @@
       <button data-scene="cafe">Café</button>
     </div>
     <div class="spacer"></div>
-    <button id="guideBtn" class="toggle on" aria-pressed="true">Guide me</button>
-    <button id="describeBtn" class="toggle" aria-pressed="false">Describe</button>
-    <button id="sceneBtn" class="secondary">Speak the scene</button>
+    <button id="guideBtn" class="switch on" aria-pressed="true">Guide</button>
+    <button id="describeBtn" class="switch" aria-pressed="false">Describe</button>
+    <span class="divider"></span>
+    <button id="sceneBtn" class="ghost">Speak the scene</button>
     <button id="sosBtn" class="danger">SOS</button>
-    <button id="trustBtn" class="primary">Now by ear</button>
+    <button id="trustBtn" class="primary">By ear</button>
   </div>
 
   <div id="blackout" hidden>
     <div class="ring" id="ring"></div>
-    <div class="blackout-text" id="blackoutText">Steer to the door. Listen.</div>
+    <div class="blackout-text" id="blackoutText">Screen off. Find the door by sound.</div>
     <button id="finishTrust" class="ghost">Finish</button>
   </div>
 
   <div id="replay" hidden>
     <div class="replay-head">
-      <h2>What you heard, and why</h2>
+      <h2>Replay</h2>
       <p id="replaySummary"></p>
       <button id="replayClose" class="ghost">Close</button>
     </div>
@@ -123,13 +131,13 @@
 
   <div id="sos" class="sheet" hidden>
     <h2>SOS</h2>
-    <p class="mono" id="sosLine">Sending…</p>
-    <ul class="plain">
+    <p class="mono" id="sosLine">SENDING</p>
+    <ul class="plain lines">
       <li>Location shared with your contact through the Vantage View app</li>
-      <li>LoRa backup channel armed in case there is no phone network</li>
-      <li>The Halo keeps guiding you while help is on the way</li>
+      <li>LoRa backup armed in case there is no phone signal</li>
+      <li>Guidance keeps running</li>
     </ul>
-    <p class="fine">Simulated here. On the Halo, SOS runs on the Compute Pack and the LoRa radio.</p>
+    <p class="fine">On the Halo, SOS runs on the Compute Pack and the LoRa radio.</p>
     <button id="sosClose" class="secondary">Close</button>
   </div>
 </section>
@@ -141,10 +149,10 @@
       <video id="liveCam" playsinline muted autoplay></video>
       <canvas id="liveOverlay"></canvas>
       <div class="live-gate" id="liveGate">
-        <p class="eyebrow">Live</p>
-        <h2>Point the camera at the room.</h2>
+        <p class="label">Live</p>
+        <h2>Open the camera.</h2>
         <p class="dim">The detector runs on this tablet. A frame leaves it only when you ask a question.</p>
-        <button class="primary big" id="liveStart">Open the camera</button>
+        <button class="primary big" id="liveStart">Open camera</button>
         <p class="fine" id="liveStartNote"></p>
       </div>
       <div class="meters" id="readMeters" hidden>
@@ -153,10 +161,10 @@
         <div class="meter"><span>steady</span><i id="mSteady"></i></div>
         <div class="zoom" id="zoomLabel">1×</div>
       </div>
-      <button id="torchBtn" class="icon-btn float" hidden>Light</button>
-      <div class="live-status" id="liveStatus">Camera off.</div>
+      <button id="torchBtn" class="icon-btn float" aria-label="Light" aria-pressed="false" hidden><svg><use href="#i-torch"/></svg></button>
+      <div class="live-status mono" id="liveStatus">CAMERA OFF</div>
     </div>
-    <aside class="live-side">
+    <aside class="live-side" id="liveSide">
       <div class="seg modes" role="tablist">
         <button data-mode="obstacles" class="on" role="tab" aria-selected="true">Obstacles</button>
         <button data-mode="ask" role="tab" aria-selected="false">Ask</button>
@@ -164,20 +172,20 @@
       </div>
 
       <div class="panel" data-mode="obstacles">
-        <div class="hazard-line" id="detHazard" data-level="0">Clear</div>
-        <ul class="det-list plain" id="detList"><li class="muted">Nothing recognised yet.</li></ul>
+        <div class="hazard-line mono" id="detHazard" data-level="0">CLEAR</div>
+        <ul class="det-list plain mono" id="detList"><li class="muted">Nothing in range.</li></ul>
         <div class="row">
-          <button id="detDescribe" class="toggle" aria-pressed="false">Describe</button>
-          <button id="detScene" class="secondary">Speak the scene</button>
+          <button id="detDescribe" class="switch" aria-pressed="false">Describe</button>
+          <button id="detScene" class="ghost">Speak the scene</button>
         </div>
         <p class="fine">Range is estimated from how big each object looks. The Halo measures it with a laser.</p>
       </div>
 
       <div class="panel" data-mode="ask" hidden>
-        <div class="chips" id="askChips"></div>
+        <div class="chip-rail" id="askChips"></div>
         <form class="ask-form" id="askForm">
-          <input id="askInput" type="text" autocomplete="off" placeholder="Ask anything about what's in front of you" aria-label="Your question">
-          <button type="button" id="askMic" class="icon-btn" title="Speak your question" hidden>Mic</button>
+          <input id="askInput" type="text" autocomplete="off" placeholder="Or type a question" aria-label="Your question">
+          <button type="button" id="askMic" class="icon-btn" aria-label="Speak your question" hidden><svg><use href="#i-mic"/></svg></button>
           <button type="submit" class="primary">Ask</button>
         </form>
         <ol class="turns plain" id="askLog"></ol>
@@ -187,12 +195,12 @@
       <div class="panel" data-mode="read" hidden>
         <div class="row read-controls">
           <button id="readNow" class="primary">Read now</button>
-          <button id="readPrev" class="secondary" aria-label="Previous sentence">◂</button>
-          <button id="readPause" class="secondary">Pause</button>
-          <button id="readNext" class="secondary" aria-label="Next sentence">▸</button>
-          <button id="readAuto" class="toggle on" aria-pressed="true">Auto</button>
+          <button id="readPrev" class="ghost" aria-label="Previous sentence">◂</button>
+          <button id="readPause" class="ghost">Pause</button>
+          <button id="readNext" class="ghost" aria-label="Next sentence">▸</button>
+          <button id="readAuto" class="switch on" aria-pressed="true">Auto</button>
         </div>
-        <div id="readOut" class="read-out"><p class="muted">Nothing read yet. Hold a page, a label or a sign in front of the camera.</p></div>
+        <div id="readOut" class="read-out"><p class="muted">Hold a page, label or sign in front of the camera.</p></div>
       </div>
     </aside>
   </div>
@@ -210,20 +218,20 @@
         <p class="dim">Sensor Visor on the head, under 100 g. Compute Pack at the waist. One Type-C cable.</p>
       </div>
       <div class="inside-tools">
-        <button id="posterBtn" class="toggle" aria-pressed="false">As worn</button>
-        <button id="xrayBtn" class="toggle" aria-pressed="false">Hold over the model</button>
+        <button id="posterBtn" class="switch" aria-pressed="false">As worn</button>
+        <button id="xrayBtn" class="switch" aria-pressed="false">Through the camera</button>
         <button id="twinReset" class="ghost">Reset view</button>
       </div>
     </div>
     <ul class="twin-list plain" id="twinList"></ul>
     <div class="poster" id="poster" hidden><img src="assets/halo-poster.jpg" alt="The Halo on a head, rendered"><span>Render of the Halo as worn. Tap to close.</span></div>
     <div class="explode">
-      <span>Assembled</span>
+      <span class="label">Assembled</span>
       <input type="range" id="explode" min="0" max="1000" value="0" aria-label="Take apart">
-      <span>Apart</span>
+      <span class="label">Apart</span>
     </div>
     <div class="card" id="partCard" hidden>
-      <div class="card-head"><h3 id="cardTitle"></h3><span class="badge" id="cardStatus"></span><button id="cardClose" class="ghost" aria-label="Close">×</button></div>
+      <div class="card-head"><h3 id="cardTitle"></h3><span class="badge" id="cardStatus"></span><button id="cardClose" class="icon-btn" aria-label="Close"><svg><use href="#i-close"/></svg></button></div>
       <img id="cardImg" class="card-img" alt="" hidden>
       <p class="card-line" id="cardLine"></p>
       <p class="card-detail" id="cardDetail"></p>
@@ -233,11 +241,11 @@
   </div>
 </section>
 
-<!-- ================================================================ UNDER THE HOOD -->
+<!-- ================================================================ PIPELINE -->
 <section id="hood" class="room">
   <div class="hood-wrap">
     <div class="hood-head">
-      <h2>Under the hood</h2>
+      <h2>Pipeline</h2>
       <p class="dim">The same pipeline as <code>vantage_core.py</code>, live. Messages queue by priority, a critical one sweeps out anything less urgent, and a message that goes stale is dropped instead of spoken.</p>
       <button id="hoodClose" class="ghost">Back</button>
     </div>
@@ -257,15 +265,15 @@
     </div>
     <div class="hood-cols">
       <div>
-        <h4>Queue</h4>
+        <p class="label">Queue</p>
         <ul id="queueList" class="mono plain"></ul>
-        <h4>Queue events</h4>
+        <p class="label">Queue events</p>
         <ul id="queueEvents" class="mono plain"></ul>
       </div>
       <div>
-        <h4>Dashboard</h4>
+        <p class="label">Dashboard</p>
         <pre id="dash" class="mono"></pre>
-        <h4>vantage.log</h4>
+        <p class="label">vantage.log</p>
         <pre id="logLines" class="mono"></pre>
       </div>
     </div>
@@ -274,31 +282,31 @@
 
 </main>
 
-<!-- settings sheet -->
-<div id="settings" class="sheet" hidden>
-  <h2>Settings</h2>
-  <h4>Halo</h4>
+<!-- settings drawer -->
+<div id="scrim" class="scrim" hidden></div>
+<aside id="settings" class="drawer" hidden aria-label="Settings">
+  <div class="drawer-head"><h2>Settings</h2><button id="settingsClose" class="icon-btn" aria-label="Close"><svg><use href="#i-close"/></svg></button></div>
+  <p class="label">Halo</p>
   <p class="dim">The same options as <code>vantage_core.py</code>. Changes apply at once.</p>
-  <label>Too close <output id="vCritical">50</output> cm <input type="range" id="sCritical" min="20" max="120" value="50"></label>
-  <label>Ahead <output id="vWarning">100</output> cm <input type="range" id="sWarning" min="60" max="250" value="100"></label>
-  <label>Repeat a critical alert every <output id="vRepeat">2.5</output> s <input type="range" id="sRepeat" min="10" max="60" value="25"></label>
-  <label>Detection threshold <output id="vThreshold">0.55</output> <input type="range" id="sThreshold" min="30" max="90" value="55"></label>
-  <label>Laser offset from the lens <output id="vOffset">0</output> cm <input type="range" id="sOffset" min="-8" max="8" value="0"></label>
-  <label class="row"><input type="checkbox" id="sBeep" checked> Tones before critical alerts</label>
-  <label class="row"><input type="checkbox" id="sHaptic" checked> Show the haptic indicator</label>
-  <h4>Vision model</h4>
+  <label class="field"><span>Too close (critical)</span><output id="vCritical">50</output><span class="unit">cm</span><input type="range" id="sCritical" min="20" max="120" value="50"></label>
+  <label class="field"><span>Ahead (warning)</span><output id="vWarning">100</output><span class="unit">cm</span><input type="range" id="sWarning" min="60" max="250" value="100"></label>
+  <label class="field"><span>Repeat a critical alert every</span><output id="vRepeat">2.5</output><span class="unit">s</span><input type="range" id="sRepeat" min="10" max="60" value="25"></label>
+  <label class="field"><span>Detection threshold</span><output id="vThreshold">0.55</output><span class="unit"></span><input type="range" id="sThreshold" min="30" max="90" value="55"></label>
+  <label class="field"><span>Laser offset from the lens</span><output id="vOffset">0</output><span class="unit">cm</span><input type="range" id="sOffset" min="-8" max="8" value="0"></label>
+  <label class="switch-row"><span>Tones before critical alerts</span><input type="checkbox" id="sBeep" checked></label>
+  <label class="switch-row"><span>Show the haptic indicator</span><input type="checkbox" id="sHaptic" checked></label>
+  <p class="label">Vision model</p>
   <p class="dim">Answers questions and reads print from the camera. Google's Gemini API has a free tier: sign in at <span class="mono">aistudio.google.com</span>, choose <em>Get API key</em>, and paste it here. The key stays on this device.</p>
-  <label>Gemini API key <input type="password" id="sKey" autocomplete="off" placeholder="AIza…"></label>
+  <label class="text-field"><span>Gemini API key</span><input type="password" id="sKey" autocomplete="off" placeholder="AIza…"></label>
   <p class="fine" id="sKeyState"></p>
-  <label>Model <input type="text" id="sModel" autocomplete="off" placeholder="gemini-3.5-flash-lite"></label>
-  <p class="fine">Leave empty for the default. If a model id stops working, the app tries the next free one on its own.</p>
-  <div class="row">
-    <button id="settingsClose" class="primary">Done</button>
-    <button id="hoodOpen" class="ghost">Under the hood</button>
+  <label class="text-field"><span>Model</span><input type="text" id="sModel" autocomplete="off" placeholder="gemini-3.5-flash-lite"></label>
+  <p class="fine">Blank uses the default. If a model stops answering, the next free one is tried.</p>
+  <div class="row drawer-foot">
+    <button id="hoodOpen" class="ghost">Pipeline</button>
   </div>
-</div>
+</aside>
 
-<footer class="disclaimer" id="disclaimer">Simulated on this tablet. On the Halo the detector runs on the camera sensor and the distance comes from a laser rangefinder.</footer>
+<footer class="disclaimer mono" id="disclaimer"><span class="sim">SIM</span><span class="foot-text">Tablet stand-in. On the Halo the detector runs on the sensor and range comes from the laser.</span></footer>
 
 <script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js" } }</script>
 <script type="module" src="js/app.js"></script>

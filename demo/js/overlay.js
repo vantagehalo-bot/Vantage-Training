@@ -11,8 +11,8 @@ export const COLORS = {
   [Level.CRITICAL]: "#e24b3b", [Level.CAUTION]: "#f0a830",
   [Level.CLEAR]: "#5ad25a", [Level.UNKNOWN]: "#8e8a83",
 };
-const RED = "#e24b3b", MONO = "11px 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
-const MONO_B = "bold 15px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+const RED = "#e24b3b", MONO = "11px 'Atkinson Hyperlegible Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const MONO_B = "bold 15px 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace";
 
 export function drawOverlay(ctx, W, H, p, opts = {}) {
   const { tracks = [], hazard, lidarSample: lid, speech, cfg } = p;
@@ -27,14 +27,14 @@ export function drawOverlay(ctx, W, H, p, opts = {}) {
   for (const t of tracks) {
     const [x, y, w, h] = t.box;
     const isTarget = hazard && hazard.target === t;
-    const col = isTarget ? COLORS[Math.max(hazard.level, Level.CAUTION)] : "#9fd0e8";
-    ctx.strokeStyle = col; ctx.lineWidth = isTarget ? 3 : 1.5;
+    const col = isTarget ? COLORS[Math.max(hazard.level, Level.CAUTION)] : "rgba(236,232,225,0.75)";
+    ctx.strokeStyle = col; ctx.lineWidth = isTarget ? 3 : 1;
     ctx.strokeRect(ox + x * sx, oy + y * sy, w * sx, h * sy);
     const txt = `${spokenLabel(t.label)} ${t.score.toFixed(2)}`;
     ctx.font = MONO; const tw = ctx.measureText(txt).width + 8;
     const ly = Math.max(44, oy + y * sy);   // label stays below the status box when the box runs off the top
-    ctx.fillStyle = col; ctx.fillRect(ox + x * sx, ly - 15, tw, 15);
-    ctx.fillStyle = "#000"; ctx.fillText(txt, ox + x * sx + 4, ly - 4);
+    ctx.fillStyle = isTarget ? col : "rgba(5,5,5,0.72)"; ctx.fillRect(ox + x * sx, ly - 15, tw, 15);
+    ctx.fillStyle = isTarget ? "#000" : "#ece8e1"; ctx.fillText(txt, ox + x * sx + 4, ly - 4);
     const cm = isTarget && hazard.distanceCm != null ? hazard.distanceCm : (opts.live && t.rangeCm != null ? t.rangeCm : null);
     if (cm != null) {
       const d = cm < 100 ? `${cm.toFixed(0)} cm` : `${(cm / 100).toFixed(1)} m`;
@@ -64,7 +64,7 @@ export function drawOverlay(ctx, W, H, p, opts = {}) {
   const yFor = cm => by + bh - Math.min(1, cm / maxCm) * bh;
   ctx.fillStyle = "rgba(226,75,59,0.25)"; ctx.fillRect(bx, yFor(cfg.criticalCm), 12, by + bh - yFor(cfg.criticalCm));
   ctx.fillStyle = "rgba(240,168,48,0.2)"; ctx.fillRect(bx, yFor(cfg.warningCm), 12, yFor(cfg.criticalCm) - yFor(cfg.warningCm));
-  ctx.font = "9px 'IBM Plex Mono', ui-monospace, Menlo, monospace"; ctx.fillStyle = "#cfcac2"; ctx.textAlign = "right";
+  ctx.font = "9px 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace"; ctx.fillStyle = "#cfcac2"; ctx.textAlign = "right";
   for (const cm of [cfg.criticalCm, cfg.warningCm, 200, 300]) { ctx.fillRect(bx - 4, yFor(cm), 4, 1); ctx.fillText(`${cm}`, bx - 6, yFor(cm) + 3); }
   ctx.textAlign = "left";
   if (lid && lid.valid && lid.distanceCm != null) {
@@ -90,7 +90,7 @@ export function drawOverlay(ctx, W, H, p, opts = {}) {
   if (opts.haptics !== false) {
     const on = hazard && hazard.level === Level.CRITICAL && Math.floor(now * 4) % 2 === 0;
     const side = hazard && hazard.target ? (hazard.target.center[0] < cfg.width / 2 ? "L" : "R") : null;
-    ctx.font = "10px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+    ctx.font = "10px 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace";
     ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(W - 112, 6, 76, 20);
     ctx.fillStyle = on && side === "L" ? RED : "#5e5a54"; ctx.beginPath(); ctx.arc(W - 100, 16, 5, 0, 7); ctx.fill();
     ctx.fillStyle = "#bdb6ac"; ctx.fillText("haptic", W - 90, 20);
@@ -108,13 +108,13 @@ export function drawOverlay(ctx, W, H, p, opts = {}) {
     ctx.fillText(msg, 10, HB - 45);
   } else if (hazard && hazard.level === Level.CAUTION && hazard.message) {
     ctx.fillStyle = "rgba(240,168,48,0.88)"; ctx.fillRect(0, HB - 66, W, 30);
-    ctx.fillStyle = "#120f0c"; ctx.font = "bold 14px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+    ctx.fillStyle = "#120f0c"; ctx.font = "bold 14px 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace";
     ctx.fillText(hazard.message, 10, HB - 45);
   }
 
   // Spoken line
   ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, HB - 32, W, 32);
-  ctx.font = "13px 'IBM Plex Mono', ui-monospace, Menlo, monospace";
+  ctx.font = "13px 'Atkinson Hyperlegible Mono', ui-monospace, Menlo, monospace";
   if (speech) {
     const cur = speech.current;
     const text = cur ? cur.text : speech.lastSpoken;

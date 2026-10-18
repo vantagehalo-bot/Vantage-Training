@@ -10,7 +10,7 @@ threshold and repeat interval matches the firmware.
 | **Walk** | Abdullah's trip to the coffee shop in three virtual scenes (home, street, café). Split view: what a sighted person sees, and the Halo's own preview. The detector and the laser are simulated from the scene's ground truth, glass and black surfaces included. "Now by ear" blacks the screen out and replays what was said afterwards. |
 | **Live** | The tablet camera as the Halo's eye. **Obstacles**: an on-device detector feeds the ported announcer, with range estimated from how big each object looks. **Ask**: preset questions ("What's in front of me?", "Is the way clear?", "What's on the menu?") answered from the current frame by a vision model, or from the detector when there is no key. **Read**: the reader, with on-device OCR or the vision model. |
 | **Inside** | The printed visor (from the Fusion 360 export) with every part placed inside it, an explode slider, labels, part photos and a card per part. |
-| **Under the hood** | The live pipeline, speech queue events, the dashboard and the log. Settings → Under the hood, or a four-finger tap in Walk. |
+| **Pipeline** | The live pipeline, speech queue events, the dashboard and the log. Settings → Pipeline, or a four-finger tap in Walk. |
 
 Everything the page needs is vendored: no CDN at runtime, no build step. After one load
 the service worker keeps it working without Wi-Fi.
@@ -40,7 +40,7 @@ the service worker keeps it working without Wi-Fi.
 | Walk | two-finger tap | speak the scene (the device's `s` key) |
 | Walk | long press | mute / unmute |
 | Walk | three-finger tap | describe mode |
-| Walk | four-finger tap | Under the hood |
+| Walk | four-finger tap | Pipeline |
 | Live, Read | pinch | zoom 1×–3×, spoken when the pinch ends |
 | Inside | drag / pinch / tap | orbit / zoom / part card |
 | Laptop | W A S D or arrows, Q/E to turn, S speaks the scene, M mutes | |
