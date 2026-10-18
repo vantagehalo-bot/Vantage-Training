@@ -156,16 +156,20 @@
   <div class="inside-wrap">
     <video id="insideCam" playsinline muted autoplay hidden></video>
     <canvas id="twin"></canvas>
+    <div class="twin-labels" id="twinLabels"></div>
     <div class="inside-top">
       <div>
-        <h2>Vantage Vision Halo <span class="dim">· V2 split-pack</span></h2>
+        <h2><img src="assets/logo-mark.png" alt="" class="eye"> Vantage Vision Halo <span class="dim">· V2 split-pack</span></h2>
         <p class="dim">Sensor Visor on the head, under 100 g. Compute Pack at the waist. One Type-C cable.</p>
       </div>
       <div class="inside-tools">
+        <button id="posterBtn" class="toggle">As worn</button>
         <button id="xrayBtn" class="toggle">Hold over the model</button>
         <button id="twinReset" class="ghost">Reset view</button>
       </div>
     </div>
+    <ul class="twin-list plain" id="twinList"></ul>
+    <div class="poster" id="poster" hidden><img src="assets/halo-poster.jpg" alt="The Halo on a head, rendered"><span>Render of the Halo as worn. Tap to close.</span></div>
     <div class="explode">
       <span>Assembled</span>
       <input type="range" id="explode" min="0" max="1000" value="0">
@@ -173,6 +177,7 @@
     </div>
     <div class="card" id="partCard" hidden>
       <div class="card-head"><h3 id="cardTitle"></h3><span class="badge" id="cardStatus"></span><button id="cardClose" class="ghost">×</button></div>
+      <img id="cardImg" class="card-img" alt="" hidden>
       <p class="card-line" id="cardLine"></p>
       <p class="card-detail" id="cardDetail"></p>
       <p class="card-spec mono" id="cardSpec"></p>

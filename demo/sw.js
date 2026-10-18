@@ -1,9 +1,10 @@
 // Offline cache: after one load the demo runs without the venue Wi-Fi.
-const VERSION = "vantage-lens-v1";
+const VERSION = "vantage-lens-v2";
 const PRECACHE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
   "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js",
-  "vendor/three/three.module.js", "vendor/three/OrbitControls.js",
+  "vendor/three/three.module.js", "vendor/three/OrbitControls.js", "vendor/three/GLTFLoader.js", "vendor/three/utils/BufferGeometryUtils.js",
+  "assets/halo-visor.glb", "assets/halo-poster.jpg", "assets/logo-mark.png", "assets/parts/part-ai-camera.png", "assets/parts/part-cm5.png", "assets/parts/part-lidar.png", "assets/parts/part-nano-base.png", "assets/parts/part-openmove.png", "assets/parts/part-tof.png",
   "vendor/tesseract/tesseract.min.js", "vendor/tesseract/worker.min.js", "vendor/tesseract/tesseract-core-simd-lstm.wasm.js", "vendor/tesseract/tesseract-core-lstm.wasm.js", "vendor/tesseract/eng.traineddata",
 ];
 self.addEventListener("install", (e) => {

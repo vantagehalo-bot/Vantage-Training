@@ -42,7 +42,7 @@ function showRoom(name) {
   if (prev === "inside" && inside) inside.stop();
   if (name === "walk") { resizePanes(); if (!state.worldReady) loadScene(state.scene); }
   if (name === "read") { if (!reader) reader = initReader({ video: $("cam"), overlay: $("readOverlay"), view: $("readView"), out: $("readOut"), status: $("readStatus"), meters: { sharp: $("mSharp"), light: $("mLight"), steady: $("mSteady") }, zoomLabel: $("zoomLabel"), buttons: { start: $("camStart"), now: $("readNow"), prev: $("readPrev"), pause: $("readPause"), next: $("readNext"), auto: $("readAuto") } }); reader.start(); }
-  if (name === "inside") { if (!inside) inside = initInside({ canvas: $("twin"), video: $("insideCam"), slider: $("explode"), card: { root: $("partCard"), title: $("cardTitle"), status: $("cardStatus"), line: $("cardLine"), detail: $("cardDetail"), spec: $("cardSpec"), close: $("cardClose") }, xray: $("xrayBtn"), reset: $("twinReset"), hint: $("insideHint") }); inside.start(); }
+  if (name === "inside") { if (!inside) inside = initInside({ canvas: $("twin"), video: $("insideCam"), slider: $("explode"), card: { root: $("partCard"), title: $("cardTitle"), status: $("cardStatus"), line: $("cardLine"), detail: $("cardDetail"), spec: $("cardSpec"), close: $("cardClose"), img: $("cardImg") }, xray: $("xrayBtn"), reset: $("twinReset"), hint: $("insideHint"), labels: $("twinLabels"), list: $("twinList"), poster: $("poster"), posterBtn: $("posterBtn") }); inside.start(); }
   $("disclaimer").style.visibility = (name === "inside") ? "hidden" : "visible";
   if (name === "hood") hood.start(); else hood.stop();
 }
