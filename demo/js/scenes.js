@@ -47,7 +47,7 @@ export function home({ shuffle = 0 } = {}) {
   const d = P.dog(); props.push(d);
   const path = [[-1.0, 1.8], [0.6, 1.2], [1.2, -0.2], [-0.2, -1.2], [-1.8, -0.6]];
   actors.push(walker(d, path, 0.55, { pause: 1.8, loop: true }));
-  const rail = [[0.3, 2.5], [0.3, 1.6], [0.0, 0.9], [-0.1, 0.2], [0.6, -0.6], [0.3, -1.3], [-0.4 + j(1.2), -1.9], [-0.4 + j(1.2), -2.35]];
+  const rail = [[0.3, 2.5], [0.3, 1.6], [0.0, 0.9], [-0.1, 0.2], [0.6, -0.6], [0.3, -1.3], [-0.4 + j(1.2), -1.6], [-0.4 + j(1.2), -2.0]];
   return {
     id: "home", title: "Home, evening", props, actors, rail,
     start: { x: 0.3, z: 2.55, yaw: 0 },    // yaw 0 looks down -z
