@@ -63,25 +63,38 @@ export function getRateWpm() { return tts.wpm; }
 /** First-word clipping on Bluetooth is covered by the beep's leading silence in the
  *  firmware. Here, saying an empty utterance on the first tap wakes the engine. */
 export function prewarm() {
+  try { ac(); } catch (_) {}
   if (tts.warmed || !window.speechSynthesis) return;
   tts.warmed = true;
-  try { ac(); const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } catch (_) {}
+  // iOS lifts its gesture rule for the page the first time speak() runs inside a tap, so this must stay synchronous
+  try { const u = new SpeechSynthesisUtterance("."); u.volume = 0.01; u.rate = 2; speechSynthesis.speak(u); } catch (_) {}
 }
+// iOS suspends audio when the page is hidden; bring the context back when it returns
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ctx) { try { ctx.resume(); } catch (_) {} } });
 
 /** Speak text; returns a cancel function. onEnd fires once, on end or cancel. */
+let lastCancel = 0;
 export function speak(text, onEnd) {
   if (!window.speechSynthesis) { const t = setTimeout(onEnd, 400 + 50 * text.length); return () => clearTimeout(t); }
-  const u = new SpeechSynthesisUtterance(text);
-  if (tts.voice) u.voice = tts.voice;
-  u.rate = Math.max(0.5, Math.min(2, tts.wpm / 160));   // engine rate 1 ≈ 160 wpm
-  u.volume = tts.volume;
-  let done = false;
-  const finish = () => { if (!done) { done = true; onEnd && onEnd(); } };
-  u.onend = finish; u.onerror = finish;
-  // Some engines never fire onend after cancel(); a watchdog keeps the queue moving.
-  const watchdog = setTimeout(finish, 1500 + 70 * text.length);
-  speechSynthesis.speak(u);
-  return () => { clearTimeout(watchdog); try { speechSynthesis.cancel(); } catch (_) {} finish(); };
+  let done = false, started = false, u = null, startTimer = 0, watchdog = 0, delay = 0;
+  const finish = () => { if (!done) { done = true; clearTimeout(startTimer); clearTimeout(watchdog); clearTimeout(delay); onEnd && onEnd(); } };
+  const go = () => {
+    if (done) return;
+    u = new SpeechSynthesisUtterance(text);
+    if (tts.voice) { u.voice = tts.voice; u.lang = tts.voice.lang || "en-US"; } else u.lang = "en-US";
+    u.rate = Math.max(0.7, Math.min(1.4, tts.wpm / 160));   // engine rate 1 ≈ 160 wpm; iOS maps outside 0.9–1.15 poorly
+    u.volume = tts.volume;
+    u.onstart = () => { started = true; };
+    u.onend = finish; u.onerror = finish;
+    // Some engines never fire onend after cancel(), and a muted iPhone can report speaking without a start: two watchdogs
+    watchdog = setTimeout(finish, 1500 + 70 * text.length);
+    startTimer = setTimeout(() => { if (!started) finish(); }, 4000);
+    speechSynthesis.speak(u);
+  };
+  // Safari ≤ 26 can drop an utterance queued right after cancel(); leave a short gap
+  const wait = 150 - (performance.now() - lastCancel);
+  if (wait > 0) delay = setTimeout(go, wait); else go();
+  return () => { try { speechSynthesis.cancel(); lastCancel = performance.now(); } catch (_) {} finish(); };
 }
 
 export function isSpeaking() { return !!(window.speechSynthesis && speechSynthesis.speaking); }

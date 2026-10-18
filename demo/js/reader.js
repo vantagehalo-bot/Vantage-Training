@@ -5,7 +5,7 @@
 import * as audio from "./audio.js";
 import { prepareForOcr, OCR_PARAMS } from "./ocr-prep.js";
 
-const STEADY_S = 0.7, BURST = 4, MIN_CONF = 60, READ_COOLDOWN_S = 3.5;
+const STEADY_S = 0.7, MIN_CONF = 60, READ_COOLDOWN_S = 3.5;
 export const COACH = {
   dark: "It's too dark to read. Turn on a light or move closer to a window.",
   glare: "There's glare on the text. Tilt it slightly away from the light.",
@@ -101,14 +101,10 @@ export class Reader {
     st.busy = true; this.onBusy(true); st.lastRead = performance.now() / 1000;
     audio.click(); this.setStatus("Reading…");
     try {
-      // burst: keep the sharpest of BURST full-size frames
-      let best = null;
-      for (let i = 0; i < BURST; i++) {
-        const c = this.camera.grab(2200, document.createElement("canvas"));
-        const s = sharpness(c);
-        if (!best || s > best.s) best = { c, s };
-        await new Promise(r => setTimeout(r, 40));
-      }
+      // a photo-pipeline still where the browser offers one, else the sharpest of a short burst
+      const stillCanvas = await this.camera.still(2600);
+      if (!stillCanvas) { this.setStatus("No frame from the camera yet."); return; }
+      const best = { c: stillCanvas };
       // the vision model reads far better than on-device OCR; use it when there is a key
       if (viaModel && this.ai && this.ai.hasKey()) {
         try {
@@ -183,14 +179,6 @@ export class Reader {
   stop() { const st = this.st; st.running = false; clearTimeout(st.timer); this.stopSpeaking(); this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height); }
 }
 
-function sharpness(c) {
-  const ctx = c.getContext("2d", { willReadFrequently: true }); const W = c.width, H = c.height;
-  const step = Math.max(1, Math.floor(W / 320)); const d = ctx.getImageData(0, 0, W, H).data; let s = 0, n = 0;
-  for (let y = step; y < H - step; y += step * 2) for (let x = step; x < W - step; x += step * 2) {
-    const i = (y * W + x) * 4, l = 4 * d[i] - d[i - 4 * step] - d[i + 4 * step] - d[i - 4 * W * step] - d[i + 4 * W * step]; s += l * l; n++;
-  }
-  return Math.sqrt(s / Math.max(1, n));
-}
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));

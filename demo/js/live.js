@@ -193,17 +193,28 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   ask.form.addEventListener("submit", (e) => { e.preventDefault(); const t = ask.input.value.trim(); if (!t) return; ask.input.value = ""; askQuestion(t); });
   // voice input where the browser offers it
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SR) {
+  const standalone = !!navigator.standalone;   // iOS Home Screen apps never show the speech permission prompt
+  if (SR && !standalone) {
     ask.mic.hidden = false;
+    let rec = null, silence = 0, heard = "", listening = false;
+    const stopListening = () => { listening = false; clearTimeout(silence); ask.mic.classList.remove("on"); ask.input.placeholder = "Ask anything about what's in front of you"; };
     ask.mic.addEventListener("click", () => {
-      const r = new SR(); r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 1;
-      ask.mic.classList.add("on"); ask.input.placeholder = "Listening…";
-      r.onresult = (ev) => { const t = ev.results[0][0].transcript; ask.input.value = t; askQuestion(t); ask.input.value = ""; };
-      r.onend = () => { ask.mic.classList.remove("on"); ask.input.placeholder = "Ask anything about what's in front of you"; };
-      r.onerror = () => { ask.mic.classList.remove("on"); ask.input.placeholder = "Couldn't hear that. Try again, or type."; };
-      try { r.start(); } catch (_) { ask.mic.classList.remove("on"); }
+      if (listening) { try { rec.stop(); } catch (_) {} return; }
+      rec = rec || new SR(); rec.lang = "en-US"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
+      heard = ""; listening = true; ask.mic.classList.add("on"); ask.input.placeholder = "Listening…";
+      rec.onresult = (ev) => {
+        clearTimeout(silence); let interim = "";
+        for (const r of ev.results) { if (r.isFinal) heard += r[0].transcript; else interim += r[0].transcript; }
+        ask.input.value = (heard + interim).trim();
+        silence = setTimeout(() => { try { rec.stop(); } catch (_) {} }, 1500);   // iOS does not stop on silence by itself
+      };
+      rec.onerror = (e) => { stopListening(); ask.input.placeholder = e.error === "not-allowed" ? "Microphone not allowed. Turn on Dictation in Settings and allow the mic." : "Couldn't hear that. Try again, or type."; };
+      rec.onend = () => { const t = (heard || ask.input.value).trim(); stopListening(); if (t) { ask.input.value = ""; askQuestion(t); } };
+      try { rec.start(); } catch (_) { stopListening(); }
     });
   } else ask.mic.hidden = true;
+  if (standalone) ask.keyNote.textContent += " Open this page in Safari itself, not from the Home Screen, for voice questions.";
+  camera.onMute = (m) => { if (m) status.textContent = "Camera paused by the system. It resumes on its own."; else status.textContent = st.mode === "read" ? "Hold the text steady." : "Looking…"; };
 
   // ------------------------------------------------------------ pinch zoom (read mode)
   const pts = new Map(); const stage = overlay.parentElement;
