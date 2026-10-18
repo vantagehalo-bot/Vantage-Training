@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0d0d0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Vantage Lens</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%23ececf1%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23eb2828%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="mark"></span>Vantage Vision <span class="dim">· Halo</span></div>
+  <nav class="rooms">
+    <button data-room="wear">Wear</button>
+    <button data-room="walk">Walk</button>
+    <button data-room="read">Read</button>
+    <button data-room="inside">Inside</button>
+  </nav>
+  <div class="tools">
+    <button id="muteBtn" title="Mute (or long-press the view)">Sound on</button>
+    <button id="settingsBtn" title="Settings">Settings</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ================================================================ WEAR -->
+<section id="wear" class="room active">
+  <div class="wear-stage">
+    <p class="eyebrow">Navigate with instinct.</p>
+    <h1>Put the headset on.<br>Hold the tablet like a window.</h1>
+    <p class="lede">For the next few minutes this tablet is the Halo. You will hear what a wearer hears, and see what the device sees.</p>
+    <div class="wear-steps">
+      <div class="step" id="stepBeep">
+        <div class="num">1</div>
+        <div>
+          <h3>Headset check</h3>
+          <p>The Halo leads every critical alert with two short tones so it is felt, not just heard.</p>
+          <button class="primary" id="beepBtn">Play the beep</button>
+          <span class="confirm" id="beepOk" hidden>Did you feel it? <button id="beepYes">Yes</button></span>
+        </div>
+      </div>
+      <div class="step" id="stepVoice">
+        <div class="num">2</div>
+        <div>
+          <h3>Choose the voice</h3>
+          <div class="voices" id="voices"></div>
+          <label class="rate">Speech rate <input type="range" id="rate" min="120" max="260" value="175"> <span id="rateVal">175</span> wpm</label>
+        </div>
+      </div>
+      <div class="step" id="stepGo">
+        <div class="num">3</div>
+        <div>
+          <h3>Begin</h3>
+          <p>Abdullah is going out for a coffee. Walk with him.</p>
+          <button class="primary big" id="goWalk">Start the walk</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ WALK -->
+<section id="walk" class="room">
+  <div class="panes">
+    <div class="pane left" id="paneLeft">
+      <canvas id="world"></canvas>
+      <div class="pane-label">What a sighted person sees</div>
+      <div class="joy" id="joy"><div class="knob"></div></div>
+      <div class="hint" id="walkHint">Hold to walk</div>
+      <div class="scene-title" id="sceneTitle"></div>
+    </div>
+    <div class="pane right" id="paneRight">
+      <canvas id="halo"></canvas>
+      <div class="pane-label">What the Halo sees</div>
+    </div>
+  </div>
+  <div class="walkbar">
+    <div class="chips" id="sceneChips">
+      <button data-scene="home" class="on">Home</button>
+      <button data-scene="street">Street</button>
+      <button data-scene="cafe">Café</button>
+    </div>
+    <div class="spacer"></div>
+    <button id="guideBtn" class="toggle on">Guide me</button>
+    <button id="describeBtn" class="toggle">Describe mode</button>
+    <button id="sceneBtn">Speak the scene</button>
+    <button id="sosBtn" class="sos">SOS</button>
+    <button id="trustBtn" class="accent">Now by ear</button>
+  </div>
+
+  <div id="blackout" hidden>
+    <div class="ring" id="ring"></div>
+    <div class="blackout-text" id="blackoutText">Steer to the door. Listen.</div>
+    <button id="finishTrust" class="ghost">Finish</button>
+  </div>
+
+  <div id="replay" hidden>
+    <div class="replay-head">
+      <h2>What you heard, and why</h2>
+      <p id="replaySummary"></p>
+      <button id="replayClose" class="ghost">Close</button>
+    </div>
+    <input type="range" id="scrub" min="0" max="1000" value="0">
+    <ol class="timeline" id="timeline"></ol>
+  </div>
+
+  <div id="sos" class="sheet" hidden>
+    <h2>SOS</h2>
+    <p class="mono" id="sosLine">Sending…</p>
+    <ul class="plain">
+      <li>Location shared with your contact through the Vantage View app</li>
+      <li>LoRa backup channel armed in case there is no phone network</li>
+      <li>The Halo keeps guiding you while help is on the way</li>
+    </ul>
+    <p class="fine">Simulated. On the Halo, SOS runs on the Compute Pack and the LoRa ESP32 radio.</p>
+    <button id="sosClose">Close</button>
+  </div>
+</section>
+
+<!-- ================================================================ READ -->
+<section id="read" class="room">
+  <div class="read-wrap">
+    <div class="read-view" id="readView">
+      <video id="cam" playsinline muted autoplay></video>
+      <canvas id="readOverlay"></canvas>
+      <div class="meters">
+        <div class="meter"><span>sharp</span><i id="mSharp"></i></div>
+        <div class="meter"><span>light</span><i id="mLight"></i></div>
+        <div class="meter"><span>steady</span><i id="mSteady"></i></div>
+        <div class="zoom" id="zoomLabel">1×</div>
+      </div>
+      <div class="read-status" id="readStatus">Point the camera at some text and hold still.</div>
+      <button id="camStart" class="primary">Start the camera</button>
+    </div>
+    <aside class="read-text">
+      <div class="read-controls">
+        <button id="readNow" class="primary">Read now</button>
+        <button id="readPrev">◂</button>
+        <button id="readPause">Pause</button>
+        <button id="readNext">▸</button>
+        <button id="readAuto" class="toggle on">Auto</button>
+      </div>
+      <div id="readOut" class="read-out"><p class="dim">Nothing read yet.</p></div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================================================================ INSIDE -->
+<section id="inside" class="room">
+  <div class="inside-wrap">
+    <video id="insideCam" playsinline muted autoplay hidden></video>
+    <canvas id="twin"></canvas>
+    <div class="inside-top">
+      <div>
+        <h2>Vantage Vision Halo <span class="dim">· V2 split-pack</span></h2>
+        <p class="dim">Sensor Visor on the head, under 100 g. Compute Pack at the waist. One Type-C cable.</p>
+      </div>
+      <div class="inside-tools">
+        <button id="xrayBtn" class="toggle">Hold over the model</button>
+        <button id="twinReset" class="ghost">Reset view</button>
+      </div>
+    </div>
+    <div class="explode">
+      <span>Assembled</span>
+      <input type="range" id="explode" min="0" max="1000" value="0">
+      <span>Apart</span>
+    </div>
+    <div class="card" id="partCard" hidden>
+      <div class="card-head"><h3 id="cardTitle"></h3><span class="badge" id="cardStatus"></span><button id="cardClose" class="ghost">×</button></div>
+      <p class="card-line" id="cardLine"></p>
+      <p class="card-detail" id="cardDetail"></p>
+      <p class="card-spec mono" id="cardSpec"></p>
+    </div>
+    <div class="inside-hint" id="insideHint">Drag to orbit. Pinch to zoom. Tap a part.</div>
+  </div>
+</section>
+
+<!-- ================================================================ UNDER THE HOOD -->
+<section id="hood" class="room">
+  <div class="hood-wrap">
+    <div class="hood-head">
+      <h2>Under the hood</h2>
+      <p class="dim">The same pipeline as <code>vantage_core.py</code>, live. Messages are queued by priority, a CRITICAL sweeps out anything less urgent, and a message that goes stale is dropped instead of spoken.</p>
+      <button id="hoodClose" class="ghost">Back to the walk</button>
+    </div>
+    <div class="pipeline" id="pipeline">
+      <div class="stage" data-stage="camera"><b>IMX500</b><span>on-sensor detector</span><em id="stCamera"></em></div>
+      <div class="arrow"></div>
+      <div class="stage" data-stage="tracker"><b>tracker</b><span>IoU · 2 hits</span><em id="stTracker"></em></div>
+      <div class="arrow"></div>
+      <div class="stage" data-stage="fusion"><b>fusion</b><span>beam ∩ box</span><em id="stFusion"></em></div>
+      <div class="arrow"></div>
+      <div class="stage" data-stage="announcer"><b>announcer</b><span>hysteresis · repeat</span><em id="stAnnouncer"></em></div>
+      <div class="arrow"></div>
+      <div class="stage" data-stage="queue"><b>speech queue</b><span>priority · max age</span><em id="stQueue"></em></div>
+      <div class="arrow"></div>
+      <div class="stage" data-stage="headset"><b>headset</b><span>bone conduction</span><em id="stHeadset"></em></div>
+      <div class="stage lidar" data-stage="lidar"><b>TFmini Plus</b><span>100 Hz · 3.6°</span><em id="stLidar"></em></div>
+    </div>
+    <div class="hood-cols">
+      <div>
+        <h4>Queue</h4>
+        <ul id="queueList" class="mono plain"></ul>
+        <h4>Queue events</h4>
+        <ul id="queueEvents" class="mono plain"></ul>
+      </div>
+      <div>
+        <h4>Dashboard</h4>
+        <pre id="dash" class="mono"></pre>
+        <h4>vantage.log</h4>
+        <pre id="logLines" class="mono"></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- settings sheet -->
+<div id="settings" class="sheet" hidden>
+  <h2>Halo settings</h2>
+  <p class="dim">The same options as <code>vantage_core.py</code>. Changes apply at once.</p>
+  <label>Too close <b id="vCritical">50</b> cm <input type="range" id="sCritical" min="20" max="120" value="50"></label>
+  <label>Ahead <b id="vWarning">100</b> cm <input type="range" id="sWarning" min="60" max="250" value="100"></label>
+  <label>Repeat critical every <b id="vRepeat">2.5</b> s <input type="range" id="sRepeat" min="10" max="60" value="25"></label>
+  <label>Detection threshold <b id="vThreshold">0.55</b> <input type="range" id="sThreshold" min="30" max="90" value="55"></label>
+  <label>LiDAR offset from lens <b id="vOffset">0</b> cm <input type="range" id="sOffset" min="-8" max="8" value="0"></label>
+  <label class="row"><input type="checkbox" id="sBeep" checked> Beep before critical alerts</label>
+  <label class="row"><input type="checkbox" id="sHaptic" checked> Show haptic indicator</label>
+  <button id="settingsClose">Done</button>
+  <button id="hoodOpen" class="ghost">Under the hood</button>
+</div>
+
+<footer class="disclaimer" id="disclaimer">Simulated on this tablet. On the Halo the detector runs on the camera sensor and the distance comes from a laser rangefinder.</footer>
+
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js" } }</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

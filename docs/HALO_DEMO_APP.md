@@ -1,5 +1,11 @@
 # Vantage Lens — the Halo, in your hands
 
+> **Status (18 Oct):** built. The app lives in [`demo/`](../demo/README.md) and runs every
+> room below: Wear, Walk (home, street, café), by ear with replay, Read, Inside, Under the
+> hood. Marker-based recognition of the display model was not built; the Inside room opens
+> from its tab and has a "Hold over the model" mode that puts the camera behind the twin.
+> Hosting and controls are in the demo README.
+
 A proposal for tomorrow's demo. One web app on the tablet. The visitor holds the tablet,
 wears a Shokz headset paired to it, and walks through a virtual home, street and shop as a
 Halo wearer, hearing exactly what the Halo would say. Then they turn the same tablet toward
