@@ -3,7 +3,7 @@
 name: Publish demo to GitHub Pages
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, "claude/**"]
     paths: ["demo/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 permissions:
