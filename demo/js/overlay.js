@@ -32,13 +32,15 @@ export function drawOverlay(ctx, W, H, p, opts = {}) {
     ctx.strokeRect(ox + x * sx, oy + y * sy, w * sx, h * sy);
     const txt = `${spokenLabel(t.label)} ${t.score.toFixed(2)}`;
     ctx.font = MONO; const tw = ctx.measureText(txt).width + 8;
-    ctx.fillStyle = col; ctx.fillRect(ox + x * sx, oy + y * sy - 15, tw, 15);
-    ctx.fillStyle = "#000"; ctx.fillText(txt, ox + x * sx + 4, oy + y * sy - 4);
+    const ly = Math.max(44, oy + y * sy);   // label stays below the status box when the box runs off the top
+    ctx.fillStyle = col; ctx.fillRect(ox + x * sx, ly - 15, tw, 15);
+    ctx.fillStyle = "#000"; ctx.fillText(txt, ox + x * sx + 4, ly - 4);
     const cm = isTarget && hazard.distanceCm != null ? hazard.distanceCm : (opts.live && t.rangeCm != null ? t.rangeCm : null);
     if (cm != null) {
       const d = cm < 100 ? `${cm.toFixed(0)} cm` : `${(cm / 100).toFixed(1)} m`;
       ctx.font = MONO_B; ctx.fillStyle = isTarget ? col : "rgba(255,255,255,0.85)";
-      ctx.fillText(opts.live && !isTarget ? `~${d}` : d, ox + x * sx + 4, oy + (y + h) * sy - 6);
+      const by2 = Math.min(HB - 40, oy + (y + h) * sy - 6);   // and above the banner when it runs off the bottom
+      ctx.fillText(opts.live && !isTarget ? `~${d}` : d, ox + x * sx + 4, by2);
     }
   }
 
