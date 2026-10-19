@@ -1,7 +1,7 @@
 // Offline cache: after one load the demo runs without the venue Wi-Fi.
 // Page, styles and scripts: network first (a new deploy shows up on the next load), cache when
 // the network is slow or gone. Vendored engines, models, fonts and assets: cache first.
-const VERSION = "vantage-lens-v9";
+const VERSION = "vantage-lens-v10";
 const NETWORK_FIRST_MS = 3000;
 const PRECACHE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",

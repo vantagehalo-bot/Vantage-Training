@@ -64,6 +64,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     panels.forEach(p => { p.hidden = p.dataset.mode !== mode; });
     if (meters) meters.hidden = mode !== "read" || !camera.running;
     if (prev === "read") { reader.stop(); setZoom(1, true); }
+    pipeline.quiet = mode === "ask";   // alerts only in Obstacles; Ask answers are never interrupted
+    if (mode === "ask") speech.dropAlerts();
     if (!camera.running) return;
     if (mode === "read") { stopDetectLoop(); octx.clearRect(0, 0, overlay.width, overlay.height); reader.start(); status.textContent = "HOLD STEADY · READING STARTS WHEN THE PICTURE IS SHARP"; }
     else { startDetectLoop(); status.textContent = mode === "ask" ? "TAP A QUESTION OR TYPE ONE" : "LOOKING"; }
@@ -268,8 +270,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   window.addEventListener("resize", onResize);
 
   return {
-    start() { keyLine(); if (camera.running) setMode(st.mode, true); else if (st.wasRunning) startCamera(); },
-    stop() { stopDetectLoop(); reader.stop(); if (st.mode === "read") setZoom(1, true); },
+    start() { keyLine(); pipeline.quiet = st.mode === "ask"; if (camera.running) setMode(st.mode, true); else if (st.wasRunning) startCamera(); },
+    stop() { stopDetectLoop(); reader.stop(); pipeline.quiet = false; if (st.mode === "read") setZoom(1, true); },
     release() { st.wasRunning = !!camera.stream; this.stop(); camera.stop(); torchBtn.classList.remove("on"); startBtn.parentElement.hidden = false; startBtn.disabled = false; startNote.textContent = st.wasRunning ? "Reopening" : ""; },
     refreshKey: keyLine, camera, reader, debug: () => ({ dets: st.lastDets, detector: st.detector && st.detector.name, state: st.detectorState }),
     get mode() { return st.mode; },

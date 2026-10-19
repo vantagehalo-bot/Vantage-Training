@@ -281,6 +281,11 @@ export class SpeechQueue {
     return this.muted;
   }
   get busy() { return !!this.current || this.q.length > 0; }
+  /** Drop every alert (critical and warning), queued or speaking; information stays. */
+  dropAlerts() {
+    this.q = this.q.filter(u => u.priority > Priority.WARNING);
+    if (this.current && this.current.priority <= Priority.WARNING) { this._kill(); this._pump(); }
+  }
   _pump() {
     if (this.current || !this.q.length) return;
     const utt = this.q.shift();
@@ -408,7 +413,10 @@ export class HaloPipeline {
     this.tracks = this.tracker.update(dets, now);
     this.lidarSample = this.lidar.sample(now);
     this.hazard = this.assessor.assess(this.lidarSample, this.tracks);
-    this.announcer.update(this.hazard, this.tracks, now);
+    // quiet: the Live room's Ask mode keeps detecting (boxes, answer context) but says nothing,
+    // so a spoken answer is never cut off by an alert
+    if (this.quiet) { if (this.hazard.level >= Level.CAUTION) this.hazard.message = this.announcer.phrase(this.hazard); this.announcer.banner = this.hazard.message; }
+    else this.announcer.update(this.hazard, this.tracks, now);
     return this.hazard;
   }
   speakScene() { if (this.hazard) this.announcer.describeScene(this.tracks, this.hazard); }
