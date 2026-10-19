@@ -36,7 +36,7 @@ export class Reader {
     const st = this.st; if (st.workerReady) return st.workerReady;
     this.setStatus("LOADING READER");
     st.workerReady = (async () => {
-      if (!window.Tesseract) await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "vendor/tesseract/tesseract.min.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+      if (!window.Tesseract) await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "vendor/tesseract/tesseract.min.js"; s.onload = res; s.onerror = () => rej(new Error("tesseract.min.js did not load")); document.head.appendChild(s); });
       const base = new URL("vendor/tesseract/", location.href).href;
       st.worker = await Tesseract.createWorker("eng", 1, { workerPath: base + "worker.min.js", corePath: base, langPath: base, gzip: false, logger: () => {} });
       await st.worker.setParameters(OCR_PARAMS);
@@ -102,7 +102,9 @@ export class Reader {
     for (const [y, x0, x1] of rows) { o.beginPath(); o.moveTo(v.x + x0 * sx, v.y + y * sy); o.lineTo(v.x + x1 * sx, v.y + y * sy); o.stroke(); }
   }
   drawWordBoxes(v) {
-    const { boxes, W, H } = this.st.lastBoxes; const sx = v.w / W, sy = v.h / H; const o = this.octx;
+    const { boxes, W, H } = this.st.lastBoxes; const o = this.octx;
+    const s = Math.max(v.W / W, v.H / H), w = W * s, h = H * s; v = { x: (v.W - w) / 2, y: (v.H - h) / 2, w, h };   // a photo still may be 4:3 where the video is 16:9: fit its own shape, same centre
+    const sx = v.w / W, sy = v.h / H;
     for (const b of boxes) {
       o.strokeStyle = b.conf >= 80 ? "#5ad25a" : b.conf >= MIN_CONF ? "#f0a830" : "#e24b3b";
       o.lineWidth = 1.5; o.strokeRect(v.x + b.x0 * sx, v.y + b.y0 * sy, (b.x1 - b.x0) * sx, (b.y1 - b.y0) * sy);
@@ -118,13 +120,15 @@ export class Reader {
     try {
       // a photo-pipeline still where the browser offers one, else the sharpest of a short burst (judged
       // where the text is); never shrunk here: OCR wants every pixel, ocr-prep caps the size itself
-      const stillCanvas = await this.camera.still(4096, st.textRect);
+      const stillCanvas = await this.camera.still(3200, st.textRect);
+      if (!st.running) return;   // the mode changed while the still was taken: say nothing over the next room
       if (!stillCanvas) { this.setStatus("No frame from the camera yet."); return; }
       const best = { c: stillCanvas };
       // the vision model reads far better than on-device OCR; use it when there is a key
       if (viaModel && this.ai && this.ai.hasKey()) {
         try {
           const text = await this.ai.readFrame(best.c);
+          if (!st.running) return;
           if (text) { this.present(text, { source: "model", conf: 95 }); return; }
         } catch (e) { this.setStatus(`Model unavailable (${e.message}); reading on the device.`); }
       }
@@ -134,7 +138,9 @@ export class Reader {
       if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX) { this.say(COACH.small); this.setStatus(COACH.small); return; }
       let worker;
       try { worker = await workerP; } catch (e) { this.setStatus("The reader could not load (" + (e && e.message || e) + "). Check the connection and try again."); return; }
+      if (!st.running) return;
       const { data } = await worker.recognize(prepared.canvas, {}, RECOGNIZE_OUTPUT);
+      if (!st.running) return;
       const allWords = data.words || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words)));
       const allLines = data.lines || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines));
       const words = allWords.filter(w => w.text.trim() && /[A-Za-z0-9]/.test(w.text));
@@ -156,7 +162,11 @@ export class Reader {
     const st = this.st;
     const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
     const fresh = lines.filter(l => !st.readLines.has(norm(l)));
-    if (!fresh.length) { this.setStatus(lines.length ? "NOTHING NEW ON THIS PAGE · TAP READ NOW TO HEAR IT AGAIN" : COACH.none); if (!lines.length) this.coach(); return; }
+    if (!fresh.length) {
+      this.setStatus(lines.length ? "NOTHING NEW ON THIS PAGE · TAP READ NOW TO HEAR IT AGAIN" : COACH.none);
+      if (!lines.length) this.coach(); else st.lastRead = performance.now() / 1000 + 12;   // the same card: no click and no OCR every few seconds
+      return;
+    }
     fresh.forEach(l => st.readLines.add(norm(l)));
     st.sentences = splitSentences(fresh.join("\n"));
     if (!st.sentences.length) { this.coach(); return; }

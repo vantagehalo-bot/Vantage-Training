@@ -25,7 +25,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
       const small = document.createElement("canvas"); const k = Math.min(1, 1280 / canvas.width); small.width = Math.round(canvas.width * k); small.height = Math.round(canvas.height * k); small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
       const blob = await new Promise(r => small.toBlob(r, "image/jpeg", 0.8));
       const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
-      const r = await ai.ask({ key: ai.getKey(), question: "Read all the text in this picture exactly as printed, in reading order, one line per printed line. Output only the text.", frame: { b64 }, context: "", detail: true });
+      const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ASK_TIMEOUT_MS) : undefined;
+      const r = await ai.ask({ key: ai.getKey(), question: "Read all the text in this picture exactly as printed, in reading order, one line per printed line. Output only the text.", frame: { b64 }, context: "", detail: true, signal });
       return r.text.replace(/\s*[|•]\s*/g, "\n");
     },
   };
@@ -246,7 +247,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     st.zoom = Math.max(1, Math.min(3, z));
     reader.setZoomLabel(st.zoom);
     const hw = camera._hwZoom && camera._hwZoom > 1 ? camera._hwZoom : 1;
-    if (!final) { video.style.transform = `scale(${(st.zoom / hw).toFixed(3)})`; return; }   // mid-pinch: preview only, the lens is asked once
+    if (!final) { video.style.transform = `scale(${Math.max(1, st.zoom / hw).toFixed(3)})`; return; }   // mid-pinch: preview only, the lens is asked once
     const z0 = st.zoom;
     await camera.setZoom(z0);
     if (st.zoom !== z0) return;
