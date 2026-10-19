@@ -147,7 +147,7 @@ export function initInside(el) {
   const camera = new THREE.PerspectiveCamera(36, 1, 0.01, 10); const HOME = new THREE.Vector3(0.34, 0.14, 0.5);
   camera.position.copy(HOME);
   const controls = new OrbitControls(camera, canvas); controls.enableDamping = true; controls.target.set(0, -0.09, 0); controls.minDistance = 0.12; controls.maxDistance = 1.4;
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x222228, 0.9));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3630, 1.1));
   const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(0.5, 0.8, 0.6); scene.add(key);
   const rim = new THREE.DirectionalLight(0x9fd0e8, 0.7); rim.position.set(-0.6, 0.2, -0.5); scene.add(rim);
   const fill = new THREE.DirectionalLight(0xffe0c0, 0.4); fill.position.set(0.2, -0.5, 0.8); scene.add(fill);

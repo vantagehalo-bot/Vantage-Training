@@ -217,7 +217,7 @@ footer .foot-text { white-space: nowrap; overflow: hidden; text-overflow: ellips
 .read-out .muted { font-size: var(--fs-m); }
 
 /* ---------- INSIDE */
-.inside-wrap { position: relative; height: 100%; overflow: hidden; background: var(--stage); touch-action: none; }
+.inside-wrap { position: relative; height: 100%; overflow: hidden; background: radial-gradient(ellipse at 50% 42%, #2a2724 0%, #1a1816 55%, #100f0e 100%); touch-action: none; }   /* a lit tabletop, not the stage black: the satin-black print needs something behind it */
 #twin { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #insideCam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .inside-top { position: absolute; top: 12px; left: var(--gutter); right: var(--gutter); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
