@@ -7,9 +7,9 @@ threshold and repeat interval matches the firmware.
 | Room | What happens |
 |---|---|
 | **Start** | Headset check with the firmware's two tones, voice choice, speech rate. |
-| **Walk** | Abdullah's trip to the coffee shop in three virtual scenes (home, street, café). Split view: what a sighted person sees, and the Halo's own preview. The detector and the laser are simulated from the scene's ground truth, glass and black surfaces included. "Now by ear" blacks the screen out and replays what was said afterwards. |
+| **Walk** | Abdullah's trip to the coffee shop in three virtual scenes (home, street, café). Split view: what a sighted person sees, and the Halo's own preview. The detector and the laser are simulated from the scene's ground truth, glass and black surfaces included. "Now by ear" blacks the screen out and replays what was said afterwards. **Leaving for work** is a small escape room: the picture is blurred like low vision, the Halo's boxes and voice sit on top, and the visitor finds the keys, feeds the dog and makes sure there is 100 AED in the wallet before the front door opens. Items move every game. |
 | **Live** | The tablet camera as the Halo's eye. **Obstacles**: an on-device detector feeds the ported announcer, with range estimated from how big each object looks. **Ask**: preset questions ("What's in front of me?", "Is the way clear?", "What's on the menu?") answered from the current frame by a vision model, or from the detector when there is no key. **Read**: the reader, with on-device OCR or the vision model. |
-| **Inside** | The printed visor (from the Fusion 360 export) with every part placed inside it, an explode slider, labels, part photos and a card per part. |
+| **Inside** | The printed visor (from the Fusion 360 export) with every part placed inside it, an explode slider, part photos and a card per part. A part's name tag shows when the mouse is over it (or the part is tapped), so the exploded view stays readable. |
 | **Pipeline** | The live pipeline, speech queue events, the dashboard and the log. Settings → Pipeline, or a four-finger tap in Walk. |
 
 Everything the page needs is vendored: no CDN at runtime, no build step. After one load
@@ -38,6 +38,7 @@ the service worker keeps it working without Wi-Fi.
 | Walk, left pane | hold (Guide me) / thumb joystick (free) | walk |
 | Walk, right pane | drag | look around |
 | Walk | two-finger tap | speak the scene (the device's `s` key) |
+| Walk, Leaving for work | face a thing up close | pick it up or use it (keys, wallet, note, dog food, bowl, door) |
 | Walk, right pane | long press | mute / unmute |
 | Walk | three-finger tap | describe mode |
 | Walk | four-finger tap | Pipeline |
@@ -65,9 +66,15 @@ the service worker keeps it working without Wi-Fi.
   measuring about 1,100 recognitions of degraded phone frames, where it read 85 % of the words
   against 47 % for the first version). Tiny print is coached ("move closer") rather than guessed.
   Read now reads the card again; auto mode skips lines it has already read until the page
-  leaves the frame.
+  leaves the frame. Only real words are read out: every word is checked against an English
+  word list (274k words, `vendor/words/en.txt`, MIT) plus local terms (AED, Dubai, karak),
+  numbers, units, prices, dates and product codes; a line that is mostly invented is dropped
+  whole, and dropped words show as red boxes.
 
-The footer line says this once; nothing else in the app pretends otherwise.
+The footer line says this once; nothing else in the app pretends otherwise. The "Powered by
+Jetson Nano" badge in the corner of the Walk and Live views is a drawing of the Jetson Orin
+Nano Super developer kit (`assets/jetson-orin-nano-super.svg`); to show a photo instead, add
+it to `assets/` and point the two badge `<img>` tags in `index.html` at it.
 
 ## Files
 
@@ -87,10 +94,13 @@ js/detector.js      on-device object detector
 js/range.js         range from box height
 js/ai.js            Gemini client (free tier), question presets, local fallback answers
 js/reader.js        the reader
+js/wordcheck.js     the dictionary filter that keeps invented words out of the reader
+js/escape.js        the "Leaving for work" escape room
 js/ocr-prep.js      OCR preprocessing
 js/inside.js        exploded twin and part cards
 js/hood.js          pipeline view, dashboard, log
 sw.js               offline cache
 vendor/             three.js 0.160, Tesseract.js 5.1.1 + eng.traineddata, the detector runtime
-assets/             visor GLB, part photos, poster, brand mark
+vendor/words/       English word list (sindresorhus/word-list, MIT)
+assets/             visor GLB, part photos, poster, brand mark, Jetson Orin Nano Super drawing
 ```
