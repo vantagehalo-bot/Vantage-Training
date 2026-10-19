@@ -71,7 +71,7 @@ export async function askModel({ key, question, frame, context, model, detail = 
     const cand = j.candidates && j.candidates[0];
     const text = cand && cand.content && cand.content.parts ? cand.content.parts.filter(p => !p.thought && p.text).map(p => p.text).join("").trim() : "";
     if (!text) { const err = new Error(cand && cand.finishReason ? `No answer (${cand.finishReason})` : "No answer"); err.status = 0; throw err; }
-    return { text: text.replace(/\s+/g, " "), ms: performance.now() - t0, model };
+    return { text: text.replace(/[^\S\n]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{2,}/g, "\n").trim(), ms: performance.now() - t0, model };
   }
   throw lastErr || new Error("Request rejected");
 }
@@ -94,6 +94,7 @@ export async function ask(opts) {
 
 export function explainError(e) {
   if (!e) return "unknown error";
+  if (e.name === "TimeoutError" || e.name === "AbortError") return "the model took too long";
   if (e.status === 429) return /day|daily|RPD|per day/i.test(e.message) ? "today's free quota is used up" : "the free tier is busy, try again in a moment";
   if (e.status === 403 || e.status === 401 || /API key/i.test(e.message)) return "the key was rejected";
   if (e.status === 404) return "the model id is not available to this key";

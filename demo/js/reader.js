@@ -3,9 +3,9 @@
 // burst of frames and keeps the sharpest, OCRs it on the device, then reads sentence by
 // sentence. When it cannot read, it says why, in the reader's own words.
 import * as audio from "./audio.js";
-import { prepareForOcr, OCR_PARAMS } from "./ocr-prep.js";
+import { prepareForOcr, OCR_PARAMS, RECOGNIZE_OUTPUT } from "./ocr-prep.js";
 
-const STEADY_S = 0.7, MIN_CONF = 60, READ_COOLDOWN_S = 3.5;
+const STEADY_S = 0.7, MIN_CONF = 60, READ_COOLDOWN_S = 3.5, MIN_XHEIGHT_PX = 8, TORCH_BELOW = 70, PAGE_GONE_S = 1.5;
 export const COACH = {
   dark: "It's too dark to read. Turn on a light or move closer to a window.",
   glare: "There's glare on the text. Tilt it slightly away from the light.",
@@ -16,16 +16,21 @@ export const COACH = {
 };
 
 export class Reader {
-  constructor({ camera, overlay, out, status, meters, zoomLabel, buttons, onBusy = () => {}, ai = null }) {
-    Object.assign(this, { camera, overlay, out, status, meters, zoomLabel, buttons, onBusy, ai });
+  constructor({ camera, overlay, out, status, meters, zoomLabel, buttons, onBusy = () => {}, ai = null, isMuted = () => false, onTorch = () => {} }) {
+    Object.assign(this, { camera, overlay, out, status, meters, zoomLabel, buttons, onBusy, ai, isMuted, onTorch });
     this.octx = overlay.getContext("2d");
     this.work = document.createElement("canvas"); this.wctx = this.work.getContext("2d", { willReadFrequently: true });
     this.st = { running: false, worker: null, workerReady: null, prevGray: null, steadySince: 0, lastRead: -1e9, busy: false, auto: true,
-      sentences: [], cur: -1, paused: false, speaking: false, cancelSpeak: null, readLines: new Set(), metrics: {}, lastBoxes: null, timer: 0 };
+      sentences: [], cur: -1, paused: false, speaking: false, cancelSpeak: null, readLines: new Set(), metrics: {}, lastBoxes: null, timer: 0,
+      textRect: null, goneSince: 0, torchAuto: false, dimSince: 0 };
     this._bind();
   }
   setStatus(t) { this.status.textContent = t; }
-  say(text, onEnd) { if (this.st.cancelSpeak) this.st.cancelSpeak(); this.st.cancelSpeak = audio.speak(text, () => { this.st.cancelSpeak = null; onEnd && onEnd(); }); }
+  say(text, onEnd) {
+    if (this.st.cancelSpeak) this.st.cancelSpeak();
+    if (this.isMuted()) { this.st.cancelSpeak = null; return; }   // muted: the text stays on screen, nothing is spoken
+    this.st.cancelSpeak = audio.speak(text, () => { this.st.cancelSpeak = null; onEnd && onEnd(); });
+  }
 
   ensureWorker() {
     const st = this.st; if (st.workerReady) return st.workerReady;
@@ -36,7 +41,7 @@ export class Reader {
       st.worker = await Tesseract.createWorker("eng", 1, { workerPath: base + "worker.min.js", corePath: base, langPath: base, gzip: false, logger: () => {} });
       await st.worker.setParameters(OCR_PARAMS);
       return st.worker;
-    })();
+    })().catch(e => { st.workerReady = null; st.worker = null; throw e; });
     return st.workerReady;
   }
 
@@ -62,6 +67,15 @@ export class Reader {
       if (!(motion < 6)) st.steadySince = now;
       const steadyFrac = Math.min(1, (now - st.steadySince) / STEADY_S);
       st.metrics = { sharp, light, steady: steadyFrac, text, sat: sat / (W * H), motion };
+      // where the text sits, as fractions of the frame: the burst picks its sharpest frame there
+      if (rows.length >= 3) { let x0 = W, x1 = 0; for (const r of rows) { x0 = Math.min(x0, r[1]); x1 = Math.max(x1, r[2]); } st.textRect = { x: x0 / W, y: rows[0][0] / H, w: (x1 - x0) / W, h: (rows[rows.length - 1][0] - rows[0][0] + 2) / H }; }
+      // a page taken out of view for a moment means the next one is new, even if it says the same
+      if (text < 0.04) { if (!st.goneSince) st.goneSince = now; else if (now - st.goneSince > PAGE_GONE_S && st.readLines.size) st.readLines.clear(); } else st.goneSince = 0;
+      // noise and blur, not shading, are what break OCR: light the page when the camera offers a torch
+      if (this.camera.hasTorch && st.auto) {
+        if (light < TORCH_BELOW && !st.torchAuto) { if (!st.dimSince) st.dimSince = now; else if (now - st.dimSince > 1.0) this.torch(true); }
+        else st.dimSince = 0;
+      }
       this.meter(this.meters.sharp, Math.min(1, sharp / 18), sharp > 9 ? "" : "var(--amber)");
       this.meter(this.meters.light, Math.min(1, light / 160), light > 60 && light < 235 ? "" : "var(--amber)");
       this.meter(this.meters.steady, steadyFrac, steadyFrac >= 1 ? "" : "var(--muted)");
@@ -70,6 +84,7 @@ export class Reader {
     }
     st.timer = setTimeout(() => this.analyse(), 120);
   }
+  torch(on) { const st = this.st; if (st.torchAuto === on) return; st.torchAuto = on; this.camera.setTorch(on).then(ok => { if (ok) this.onTorch(on); else st.torchAuto = false; }); }
   meter(el, v, color) { if (!el) return; el.style.setProperty("--v", `${Math.round(v * 100)}%`); el.style.setProperty("--c", color || "var(--ok)"); }
   viewRect() {
     // where the (cover-fitted) video lands on the overlay canvas, in overlay pixels
@@ -89,20 +104,21 @@ export class Reader {
   drawWordBoxes(v) {
     const { boxes, W, H } = this.st.lastBoxes; const sx = v.w / W, sy = v.h / H; const o = this.octx;
     for (const b of boxes) {
-      o.strokeStyle = b.conf >= 80 ? "var(--ok)" : b.conf >= MIN_CONF ? "#f0a830" : "#e24b3b";
       o.strokeStyle = b.conf >= 80 ? "#5ad25a" : b.conf >= MIN_CONF ? "#f0a830" : "#e24b3b";
       o.lineWidth = 1.5; o.strokeRect(v.x + b.x0 * sx, v.y + b.y0 * sy, (b.x1 - b.x0) * sx, (b.y1 - b.y0) * sy);
     }
   }
 
   // ---- capture → OCR → speak
-  async capture({ viaModel = true } = {}) {
+  async capture({ viaModel = true, manual = false } = {}) {
     const st = this.st; if (st.busy || !this.camera.running) return;
+    if (manual) st.readLines.clear();   // Read now means read it again, even the same card
     st.busy = true; this.onBusy(true); st.lastRead = performance.now() / 1000;
     audio.click(); this.setStatus("READING");
     try {
-      // a photo-pipeline still where the browser offers one, else the sharpest of a short burst
-      const stillCanvas = await this.camera.still(2600);
+      // a photo-pipeline still where the browser offers one, else the sharpest of a short burst (judged
+      // where the text is); never shrunk here: OCR wants every pixel, ocr-prep caps the size itself
+      const stillCanvas = await this.camera.still(4096, st.textRect);
       if (!stillCanvas) { this.setStatus("No frame from the camera yet."); return; }
       const best = { c: stillCanvas };
       // the vision model reads far better than on-device OCR; use it when there is a key
@@ -112,18 +128,24 @@ export class Reader {
           if (text) { this.present(text, { source: "model", conf: 95 }); return; }
         } catch (e) { this.setStatus(`Model unavailable (${e.message}); reading on the device.`); }
       }
-      const worker = await this.ensureWorker();
-      const prepared = prepareForOcr(best.c, this.st.metrics);
-      const { data } = await worker.recognize(prepared.canvas);
-      const words = (data.words || []).filter(w => w.text.trim() && /[A-Za-z0-9]/.test(w.text));
+      const workerP = this.ensureWorker(); workerP.catch(() => {});   // loads while the frame is prepared; an early return must not leave it unhandled
+      const prepared = prepareForOcr(best.c);
+      // the print is too small for the engine: say so instead of reading noise
+      if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX) { this.say(COACH.small); this.setStatus(COACH.small); return; }
+      let worker;
+      try { worker = await workerP; } catch (e) { this.setStatus("The reader could not load (" + (e && e.message || e) + "). Check the connection and try again."); return; }
+      const { data } = await worker.recognize(prepared.canvas, {}, RECOGNIZE_OUTPUT);
+      const allWords = data.words || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words)));
+      const allLines = data.lines || (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines));
+      const words = allWords.filter(w => w.text.trim() && /[A-Za-z0-9]/.test(w.text));
       const good = words.filter(w => w.confidence >= MIN_CONF - 15);
       const k = prepared.scale;
       st.lastBoxes = { boxes: words.map(w => ({ x0: w.bbox.x0 / k + prepared.offsetX, y0: w.bbox.y0 / k + prepared.offsetY, x1: w.bbox.x1 / k + prepared.offsetX, y1: w.bbox.y1 / k + prepared.offsetY, conf: w.confidence })), W: best.c.width, H: best.c.height };
       if (good.length < 2) { this.coach(); return; }
       const meanConf = good.reduce((a, w) => a + w.confidence, 0) / good.length;
-      const medH = median(good.map(w => w.bbox.y1 - w.bbox.y0)) / k;
-      if (medH < 9) { this.say(COACH.small); this.setStatus(COACH.small); return; }
-      const lines = (data.lines || []).map(l => ({ text: l.text.replace(/\s+/g, " ").trim(), conf: l.confidence, words: l.words.filter(w => w.confidence >= MIN_CONF - 15).length }))
+      const medH = median(good.map(w => w.bbox.y1 - w.bbox.y0)) / k;   // word boxes run ascender to descender, about 1.5 x-heights
+      if (medH < MIN_XHEIGHT_PX * 1.2) { this.say(COACH.small); this.setStatus(COACH.small); return; }
+      const lines = allLines.map(l => ({ text: l.text.replace(/\s+/g, " ").trim(), conf: l.confidence, words: l.words.filter(w => w.confidence >= MIN_CONF - 15).length }))
         .filter(l => l.text.length >= 2 && l.words >= 1 && /[A-Za-z0-9]{2,}/.test(l.text) && (l.text.match(/[A-Za-z0-9 .,;:'"!?()\-\/%€$£]/g) || []).length / l.text.length > 0.75);
       this.present(lines.map(l => l.text).join("\n"), { source: "device", conf: meanConf });
     } catch (e) {
@@ -134,7 +156,7 @@ export class Reader {
     const st = this.st;
     const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
     const fresh = lines.filter(l => !st.readLines.has(norm(l)));
-    if (!fresh.length) { this.setStatus("NOTHING NEW ON THIS PAGE"); return; }
+    if (!fresh.length) { this.setStatus(lines.length ? "NOTHING NEW ON THIS PAGE · TAP READ NOW TO HEAR IT AGAIN" : COACH.none); if (!lines.length) this.coach(); return; }
     fresh.forEach(l => st.readLines.add(norm(l)));
     st.sentences = splitSentences(fresh.join("\n"));
     if (!st.sentences.length) { this.coach(); return; }
@@ -150,7 +172,7 @@ export class Reader {
   }
   speakFrom(i) {
     const st = this.st;
-    if (i >= st.sentences.length) { st.speaking = false; st.cur = -1; this.render(); return; }
+    if (i >= st.sentences.length || this.isMuted()) { st.speaking = false; st.cur = -1; this.render(); return; }
     st.cur = i; st.speaking = true; this.render();
     this.say(st.sentences[i], () => { if (!st.paused && st.cur === i) this.speakFrom(i + 1); });
   }
@@ -164,7 +186,7 @@ export class Reader {
 
   _bind() {
     const b = this.buttons, st = this.st;
-    b.now.addEventListener("click", () => { audio.prewarm(); this.capture(); });
+    b.now.addEventListener("click", () => { audio.prewarm(); this.capture({ manual: true }); });
     b.pause.addEventListener("click", () => {
       if (!st.sentences.length) return;
       if (st.speaking && !st.paused) { this.stopSpeaking(); b.pause.textContent = "Resume"; }
@@ -176,7 +198,7 @@ export class Reader {
   }
   setZoomLabel(z) { if (!this.zoomLabel) return; this.zoomLabel.textContent = `${z % 1 ? z.toFixed(1) : z}×`; this.zoomLabel.classList.toggle("lossy", z > 2); }
   start() { const st = this.st; if (st.running) return; st.running = true; st.prevGray = null; st.steadySince = performance.now() / 1000; this.analyse(); }
-  stop() { const st = this.st; st.running = false; clearTimeout(st.timer); this.stopSpeaking(); this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height); }
+  stop() { const st = this.st; st.running = false; clearTimeout(st.timer); this.stopSpeaking(); if (st.torchAuto) this.torch(false); st.dimSince = 0; this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height); }
 }
 
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };

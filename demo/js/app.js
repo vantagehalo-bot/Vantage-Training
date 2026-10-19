@@ -39,7 +39,7 @@ function showRoom(name) {
   for (const r of rooms) $(r).classList.toggle("active", r === name);
   document.querySelectorAll(".rooms button").forEach(b => b.classList.toggle("on", b.dataset.room === name));
   const prev = state.room; state.room = name;
-  if (prev === "live" && live) live.stop();
+  if (prev === "live" && name !== "live" && live) live.release();   // one camera at a time: Inside may open its own
   if (prev === "inside" && inside) inside.stop();
   if (name === "walk") { resizePanes(); if (!state.worldReady) loadScene(state.scene); }
   if (name === "live") { if (!live) live = initLive({
@@ -148,7 +148,7 @@ function attachWalkInput(el, side) {
     audio.prewarm(); el.setPointerCapture(e.pointerId);
     inputState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, side });
     if (inputState.pointers.size === 1) { inputState.downAt = performance.now(); inputState.moved = false; inputState.maxPointers = 0;
-      inputState.longTimer = setTimeout(() => { if (!inputState.moved && inputState.pointers.size === 1) { toggleMute(); inputState.longFired = true; } }, 650); }
+      if (side === "right") inputState.longTimer = setTimeout(() => { if (!inputState.moved && inputState.pointers.size === 1) { toggleMute(); inputState.longFired = true; } }, 650); }
     inputState.maxPointers = Math.max(inputState.maxPointers, inputState.pointers.size);
     if (!world) return;
     if (side === "left" && inputState.joyId == null) {
@@ -192,8 +192,15 @@ function attachWalkInput(el, side) {
 attachWalkInput($("paneLeft"), "left"); attachWalkInput($("paneRight"), "right");
 // keyboard, for a laptop
 const keys = new Set();
-window.addEventListener("keydown", (e) => { keys.add(e.key.toLowerCase()); if (e.key === "s" && state.room === "walk") pipeline.speakScene(); if (e.key === "m") toggleMute(); });
+const typing = (e) => { const t = e.target; return t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable); };
+window.addEventListener("keydown", (e) => {
+  if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (state.room !== "walk" && state.room !== "hood") return;
+  keys.add(e.key.toLowerCase());
+  if (e.key === "s") pipeline.speakScene(); if (e.key === "m") toggleMute();
+});
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => keys.clear());
 function applyKeys() {
   if (!world || (state.room !== "walk" && state.room !== "hood")) return;
   const f = (keys.has("w") || keys.has("arrowup")) ? -1 : (keys.has("s") && false) ? 1 : (keys.has("arrowdown") ? 1 : 0);
@@ -319,7 +326,18 @@ document.querySelectorAll("input[type=range]").forEach(r => { r.addEventListener
 $("hoodOpen").addEventListener("click", () => { openSettings(false); showRoom("hood"); });
 $("hoodClose").addEventListener("click", () => showRoom("walk"));
 
+// iOS zooms the page on a two-finger gesture whatever the viewport says; the reader owns the pinch
+document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });
+document.addEventListener("dblclick", e => { if (!/^(INPUT|TEXTAREA|BUTTON|A)$/.test(e.target.tagName)) e.preventDefault(); }, { passive: false });
+
 // ------------------------------------------------------------------ boot
 showRoom("start");
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  // a new deploy takes over: reload on the Start screen, never in the middle of a walk or a reading
+  let pendingReload = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (!hadController) return; if (state.room === "start" && !document.hidden) location.reload(); else pendingReload = true; });
+  document.querySelectorAll("[data-room='start']").forEach(b => b.addEventListener("click", () => { if (pendingReload) setTimeout(() => location.reload(), 50); }));
+}
 window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, get live() { return live; }, loadScene, showRoom };

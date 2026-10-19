@@ -38,7 +38,7 @@ the service worker keeps it working without Wi-Fi.
 | Walk, left pane | hold (Guide me) / thumb joystick (free) | walk |
 | Walk, right pane | drag | look around |
 | Walk | two-finger tap | speak the scene (the device's `s` key) |
-| Walk | long press | mute / unmute |
+| Walk, right pane | long press | mute / unmute |
 | Walk | three-finger tap | describe mode |
 | Walk | four-finger tap | Pipeline |
 | Live, Read | pinch | zoom 1×–3×, spoken when the pinch ends |
@@ -59,8 +59,13 @@ the service worker keeps it working without Wi-Fi.
   the way the laser beam does on the device.
 * **Headset.** Web Speech API through the tablet's audio output. The two-tone beep is the
   firmware's (880 Hz 90 ms, 40 ms gap, 1320 Hz 120 ms, after 150 ms of silence).
-* **Reader.** Tesseract on the tablet with the preprocessing in `js/ocr-prep.js`, or the
-  vision model when a key is present (far better on packaging and signs).
+* **Reader.** Tesseract on the tablet, or the vision model when a key is present (far better
+  on packaging and signs). The on-device path takes the camera's largest still, crops to the
+  text, denoises lightly, stretches the contrast and sharpens hard (`js/ocr-prep.js`; chosen by
+  measuring about 1,100 recognitions of degraded phone frames, where it read 85 % of the words
+  against 47 % for the first version). Tiny print is coached ("move closer") rather than guessed.
+  Read now reads the card again; auto mode skips lines it has already read until the page
+  leaves the frame.
 
 The footer line says this once; nothing else in the app pretends otherwise.
 
@@ -68,7 +73,7 @@ The footer line says this once; nothing else in the app pretends otherwise.
 
 ```
 index.html          page shell
-css/style.css       one dark theme: warm graphite, amber accent, Plex Sans / Mono / Serif
+css/style.css       one dark theme: warm graphite, amber accent, Atkinson Hyperlegible Next + Mono
 js/app.js           rooms, settings, the Walk loop, by-ear mode and replay
 js/halo.js          port of vantage_core.py: tracker, LiDAR filter, fusion, announcer, speech queue
 js/audio.js         beep, click, Web Speech, haptic

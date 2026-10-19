@@ -11,13 +11,14 @@ import { rangeCm } from "./range.js";
 import * as ai from "./ai.js";
 
 const LIVE_THRESHOLD = 0.32;   // EfficientDet-Lite0 scores sit lower than the device network's 0.55
+const ASK_TIMEOUT_MS = 25000, DETECTOR_RETRY_S = 15, LISTEN_MAX_MS = 8000;
 
 export function initLive(el, { cfg, pipeline, speech, hood }) {
   const { video, overlay, startBtn, startNote, status, modes, panels, det, ask, read, torchBtn, zoomLabel, meters, side } = el;
   const octx = overlay.getContext("2d");
   const camera = new Camera(video);
-  const st = { mode: "obstacles", running: false, detector: null, detectorState: "idle", loop: 0, lastDets: [], frameW: cfg.width, frameH: cfg.height,
-    vfov: 43, busy: false, asking: null, pinch: null, zoom: 1, lastSpeakScene: 0, transcript: [] };
+  const st = { mode: "obstacles", running: false, gen: 0, detector: null, detectorState: "idle", detectorP: null, detectorFailedAt: 0, loop: 0, lastDets: [], frameW: cfg.width, frameH: cfg.height,
+    vfov: 43, busy: false, asking: null, pinch: null, zoom: 1, lastSpeakScene: 0, transcript: [], wasRunning: false };
   const aiBridge = {
     hasKey: () => !!ai.getKey(),
     async readFrame(canvas) {
@@ -28,7 +29,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
       return r.text.replace(/\s*[|•]\s*/g, "\n");
     },
   };
-  const reader = new Reader({ camera, overlay, out: read.out, status, meters: read.meters, zoomLabel, buttons: read.buttons, ai: aiBridge });
+  const reader = new Reader({ camera, overlay, out: read.out, status, meters: read.meters, zoomLabel, buttons: read.buttons, ai: aiBridge,
+    isMuted: () => speech.muted, onTorch: (on) => { torchBtn.classList.toggle("on", on); torchBtn.setAttribute("aria-pressed", on); } });
 
   // ------------------------------------------------------------ camera lifecycle
   async function startCamera() {
@@ -55,7 +57,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     modes.forEach(b => { b.classList.toggle("on", b.dataset.mode === mode); b.setAttribute("aria-selected", b.dataset.mode === mode); });
     panels.forEach(p => { p.hidden = p.dataset.mode !== mode; });
     if (meters) meters.hidden = mode !== "read" || !camera.running;
-    if (prev === "read") { reader.stop(); setZoom(1); }
+    if (prev === "read") { reader.stop(); setZoom(1, true); }
     if (!camera.running) return;
     if (mode === "read") { stopDetectLoop(); octx.clearRect(0, 0, overlay.width, overlay.height); reader.start(); status.textContent = "HOLD STEADY · READING STARTS WHEN THE PICTURE IS SHARP"; }
     else { startDetectLoop(); status.textContent = mode === "ask" ? "TAP A QUESTION OR TYPE ONE" : "LOOKING"; }
@@ -63,32 +65,42 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   modes.forEach(b => b.addEventListener("click", () => { audio.prewarm(); setMode(b.dataset.mode); }));
 
   // ------------------------------------------------------------ detector loop
-  async function ensureDetector() {
-    if (st.detector) return st.detector;
-    if (st.detectorState === "loading") return null;
+  function ensureDetector() {
+    if (st.detector) return Promise.resolve(st.detector);
+    if (st.detectorP) return st.detectorP;
+    if (st.detectorState === "failed" && performance.now() / 1000 - st.detectorFailedAt < DETECTOR_RETRY_S) return Promise.resolve(null);
     st.detectorState = "loading"; status.textContent = "LOADING DETECTOR";
-    try {
-      const mod = await import("./detector.js");
-      st.detector = await mod.loadDetector({ onProgress: (p) => { status.textContent = `LOADING DETECTOR · ${p.toUpperCase()}`; } });
-      st.detectorState = "ready"; status.textContent = "LOOKING";
-      return st.detector;
-    } catch (e) { st.detectorState = "failed"; status.textContent = `DETECTOR UNAVAILABLE · ${e.message}`; return null; }
+    st.detectorP = (async () => {
+      try {
+        const mod = await import("./detector.js");
+        st.detector = await mod.loadDetector({ onProgress: (p) => { if (st.detectorState === "loading") status.textContent = `LOADING DETECTOR · ${p.toUpperCase()}`; } });
+        st.detectorState = "ready"; if (st.running) status.textContent = st.mode === "ask" ? "TAP A QUESTION OR TYPE ONE" : "LOOKING";
+        return st.detector;
+      } catch (e) {
+        st.detectorState = "failed"; st.detectorFailedAt = performance.now() / 1000;
+        status.textContent = `DETECTOR UNAVAILABLE · ${(e && e.message || "LOAD FAILED").slice(0, 60)}`;
+        return null;
+      } finally { st.detectorP = null; }
+    })();
+    return st.detectorP;
   }
-  function startDetectLoop() { if (st.running) return; st.running = true; pipeline.reset(); detectTick(); }
-  function stopDetectLoop() { st.running = false; cancelAnimationFrame(st.loop); }
-  async function detectTick() {
-    if (!st.running) return;
+  // one loop at a time: a mode switch mid-await must not leave two loops feeding the pipeline
+  function startDetectLoop() { if (st.running) return; st.running = true; st.gen++; pipeline.reset(); detectTick(st.gen); }
+  function stopDetectLoop() { st.running = false; st.gen++; cancelAnimationFrame(st.loop); }
+  async function detectTick(gen) {
+    const alive = () => st.running && st.gen === gen;
+    if (!alive()) return;
     const d = await ensureDetector();
-    if (!st.running) return;
+    if (!alive()) return;
     const now = performance.now() / 1000;
     let dets = null;
     if (d && camera.running) {
       try { dets = await d.detect(video); } catch (e) { dets = null; }
     }
-    if (!st.running) return;
+    if (!alive()) return;
     feed(dets, now);
     draw();
-    st.loop = requestAnimationFrame(() => detectTick());
+    st.loop = requestAnimationFrame(() => detectTick(gen));
   }
   /** Map detector boxes (video pixels) into the firmware frame, estimate range, run the pipeline. */
   function feed(dets, now) {
@@ -172,7 +184,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
       if (key) {
         const detail = !!(q.detail);
         const frame = await camera.jpeg(detail ? 1024 : 768, detail ? 0.75 : 0.65);
-        const r = await ai.ask({ key, question: text, frame, context, detail });
+        const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ASK_TIMEOUT_MS) : undefined;
+        const r = await ai.ask({ key, question: text, frame, context, detail, signal });
         answer = r.text; meta = `${r.model.replace("gemini-", "GEMINI ").replace(/-/g, " ")} · ${(r.ms / 1000).toFixed(1)} s`;
       } else {
         answer = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg }) || "That needs the vision model. Add a free Gemini key in Settings.";
@@ -205,7 +218,8 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     ask.mic.addEventListener("click", () => {
       if (listening) { try { rec.stop(); } catch (_) {} return; }
       rec = rec || new SR(); rec.lang = "en-US"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
-      heard = ""; listening = true; ask.mic.classList.add("on"); ask.input.placeholder = "Listening…";
+      heard = ""; listening = true; ask.mic.classList.add("on"); ask.input.placeholder = "Listening";
+      silence = setTimeout(() => { try { rec.stop(); } catch (_) {} }, LISTEN_MAX_MS);
       rec.onresult = (ev) => {
         clearTimeout(silence); let interim = "";
         for (const r of ev.results) { if (r.isFinal) heard += r[0].transcript; else interim += r[0].transcript; }
@@ -228,20 +242,25 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   stage.addEventListener("pointerup", pu); stage.addEventListener("pointercancel", pu);
   stage.addEventListener("wheel", e => { if (st.mode !== "read") return; setZoom(st.zoom * (e.deltaY < 0 ? 1.1 : 0.9), false); clearTimeout(st.wheelT); st.wheelT = setTimeout(() => setZoom(Math.round(st.zoom * 2) / 2, true), 400); }, { passive: true });
   function dist2p() { const a = [...pts.values()]; return Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); }
-  function setZoom(z, announce) {
-    st.zoom = Math.max(1, Math.min(3, z)); camera.setZoom(st.zoom);
-    video.style.transform = camera._hwZoom > 1 ? "" : `scale(${st.zoom})`;
+  async function setZoom(z, final) {
+    st.zoom = Math.max(1, Math.min(3, z));
     reader.setZoomLabel(st.zoom);
-    if (announce && st.zoom !== 1) audio.speak(`Zoom ${st.zoom % 1 ? st.zoom.toFixed(1) : st.zoom} times`);
+    const hw = camera._hwZoom && camera._hwZoom > 1 ? camera._hwZoom : 1;
+    if (!final) { video.style.transform = `scale(${(st.zoom / hw).toFixed(3)})`; return; }   // mid-pinch: preview only, the lens is asked once
+    const z0 = st.zoom;
+    await camera.setZoom(z0);
+    if (st.zoom !== z0) return;
+    video.style.transform = camera._hwZoom > 1 ? "" : `scale(${st.zoom})`;
+    if (st.zoom !== 1) speech.say(`Zoom ${st.zoom % 1 ? st.zoom.toFixed(1) : st.zoom} times`, Priority.INFO, false, 3);
   }
 
   function onResize() { if (camera.running && st.mode !== "read") draw(); }
   window.addEventListener("resize", onResize);
 
   return {
-    start() { keyLine(); if (camera.running) setMode(st.mode, true); },
-    stop() { stopDetectLoop(); reader.stop(); if (st.mode === "read") setZoom(1); },
-    release() { this.stop(); camera.stop(); startBtn.parentElement.hidden = false; startBtn.disabled = false; },
+    start() { keyLine(); if (camera.running) setMode(st.mode, true); else if (st.wasRunning) startCamera(); },
+    stop() { stopDetectLoop(); reader.stop(); if (st.mode === "read") setZoom(1, true); },
+    release() { st.wasRunning = !!camera.stream; this.stop(); camera.stop(); torchBtn.classList.remove("on"); startBtn.parentElement.hidden = false; startBtn.disabled = false; startNote.textContent = st.wasRunning ? "Reopening" : ""; },
     refreshKey: keyLine, camera, reader, debug: () => ({ dets: st.lastDets, detector: st.detector && st.detector.name, state: st.detectorState }),
     get mode() { return st.mode; },
   };

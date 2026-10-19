@@ -1,5 +1,8 @@
 // Offline cache: after one load the demo runs without the venue Wi-Fi.
-const VERSION = "vantage-lens-v4";
+// Page, styles and scripts: network first (a new deploy shows up on the next load), cache when
+// the network is slow or gone. Vendored engines, models, fonts and assets: cache first.
+const VERSION = "vantage-lens-v5";
+const NETWORK_FIRST_MS = 3000;
 const PRECACHE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
   "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js", "js/live.js", "js/camera.js", "js/ai.js", "js/range.js", "js/ocr-prep.js", "js/detector.js",
@@ -14,13 +17,22 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
+const store = (req, res) => { if (res && res.ok && res.type !== "opaque") caches.open(VERSION).then(c => c.put(req, res.clone())); return res; };
+const isCode = (u, req) => req.mode === "navigate" || /\.(html|css|js|webmanifest)$/.test(u.pathname) || u.pathname.endsWith("/");
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   if (u.hostname.endsWith("googleapis.com") && !u.hostname.startsWith("fonts.")) return;      // the model API is never cached
   const sameOrigin = u.origin === location.origin, font = u.hostname === "fonts.googleapis.com" || u.hostname === "fonts.gstatic.com";
   if (!sameOrigin && !font) return;
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-    const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); return res;
-  })));
+  if (sameOrigin && !u.pathname.includes("/vendor/") && !u.pathname.includes("/assets/") && isCode(u, e.request)) {
+    e.respondWith(new Promise((resolve) => {
+      let settled = false;
+      const useCache = () => caches.match(e.request, { ignoreSearch: true }).then(hit => { if (!settled) { settled = true; resolve(hit || fetch(e.request)); } });
+      const timer = setTimeout(useCache, NETWORK_FIRST_MS);
+      fetch(e.request).then(res => { clearTimeout(timer); if (settled) { store(e.request, res); return; } settled = true; resolve(store(e.request, res)); }).catch(() => { clearTimeout(timer); useCache(); });
+    }));
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(res => store(e.request, res))));
 });

@@ -16,8 +16,11 @@ export class Camera {
 
   async start() {
     if (this.stream) return this.stream;
+    // the reader wants every pixel the sensor offers (print at arm's length is 10 px x-height at
+    // 1080p); the detector draws its own 640 px copy, so a large stream costs it nothing
     const tries = [
-      { facingMode: { exact: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      { facingMode: { exact: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+      { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1440 } },
       { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       { facingMode: { ideal: "environment" } },
       true,
@@ -52,10 +55,11 @@ export class Camera {
   }
   /**
    * A still for reading: the camera's photo pipeline at its largest size where the browser
-   * offers it (iOS 18.4+, Android Chrome), else the sharpest of a short burst of video frames.
+   * offers it (iOS 18.4+, Android Chrome), else the sharpest of a short burst of video frames,
+   * judged inside `rect` (fractions of the frame: where the text is) when given.
    * Returns a canvas in the same crop as the live view.
    */
-  async still(maxW = 2600) {
+  async still(maxW = 4096, rect = null) {
     if (this.imageCapture) {
       try {
         const blob = await this._serial(async () => {
@@ -76,7 +80,7 @@ export class Camera {
     let best = null;
     for (let i = 0; i < 4; i++) {
       const c = this.grab(maxW, document.createElement("canvas")); if (!c) break;
-      const s = frameSharpness(c);
+      const s = frameSharpness(c, rect);
       if (!best || s > best.s) best = { c, s };
       await new Promise(r => setTimeout(r, 40));
     }
@@ -115,11 +119,17 @@ export class Camera {
   }
 }
 
-function frameSharpness(c) {
-  const ctx = c.getContext("2d", { willReadFrequently: true }); const W = c.width, H = c.height;
-  const step = Math.max(1, Math.floor(W / 320)); const d = ctx.getImageData(0, 0, W, H).data; let s = 0, n = 0;
+/** Laplacian energy over the noise floor, inside `rect` (fractions) or the whole frame. */
+function frameSharpness(c, rect = null) {
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  const r = rect && rect.w > 0.05 && rect.h > 0.05 ? rect : { x: 0, y: 0, w: 1, h: 1 };
+  const x0 = Math.floor(r.x * c.width), y0 = Math.floor(r.y * c.height), W = Math.max(8, Math.floor(r.w * c.width)), H = Math.max(8, Math.floor(r.h * c.height));
+  const step = Math.max(1, Math.floor(W / 320)); const d = ctx.getImageData(x0, y0, W, H).data; const vals = [];
   for (let y = step; y < H - step; y += step * 2) for (let x = step; x < W - step; x += step * 2) {
-    const i = (y * W + x) * 4, l = 4 * d[i] - d[i - 4 * step] - d[i + 4 * step] - d[i - 4 * W * step] - d[i + 4 * W * step]; s += l * l; n++;
+    const i = (y * W + x) * 4; vals.push(Math.abs(4 * d[i] - d[i - 4 * step] - d[i + 4 * step] - d[i - 4 * W * step] - d[i + 4 * W * step]));
   }
-  return Math.sqrt(s / Math.max(1, n));
+  if (!vals.length) return 0;
+  vals.sort((a, b) => a - b);
+  const noise = vals[vals.length >> 1] || 1, edges = vals[Math.floor(vals.length * 0.98)];   // typical pixel = noise, top 2 % = strokes
+  return edges / noise;
 }

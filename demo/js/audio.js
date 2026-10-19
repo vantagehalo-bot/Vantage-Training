@@ -4,7 +4,7 @@
 let ctx = null;
 function ac() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === "suspended") ctx.resume();
+  if (ctx.state !== "running") ctx.resume().catch(() => {});   // "suspended", and iOS's "interrupted" after a call or Siri
   return ctx;
 }
 
@@ -70,7 +70,7 @@ export function prewarm() {
   try { const u = new SpeechSynthesisUtterance("."); u.volume = 0.01; u.rate = 2; speechSynthesis.speak(u); } catch (_) {}
 }
 // iOS suspends audio when the page is hidden; bring the context back when it returns
-document.addEventListener("visibilitychange", () => { if (!document.hidden && ctx) { try { ctx.resume(); } catch (_) {} } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ctx && ctx.state !== "running") { try { ctx.resume().catch(() => {}); } catch (_) {} } });
 
 /** Speak text; returns a cancel function. onEnd fires once, on end or cancel. */
 let lastCancel = 0;
@@ -87,7 +87,8 @@ export function speak(text, onEnd) {
     u.onstart = () => { started = true; };
     u.onend = finish; u.onerror = finish;
     // Some engines never fire onend after cancel(), and a muted iPhone can report speaking without a start: two watchdogs
-    watchdog = setTimeout(finish, 1500 + 70 * text.length);
+    // (the first scaled to the rate: 70 ms a character at 160 wpm, with a margin for a slow engine)
+    watchdog = setTimeout(finish, 1500 + 70 * text.length * (160 / tts.wpm) * 1.5);
     startTimer = setTimeout(() => { if (!started) finish(); }, 4000);
     speechSynthesis.speak(u);
   };
