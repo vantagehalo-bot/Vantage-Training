@@ -10,6 +10,7 @@ import { initLive } from "./live.js";
 import * as ai from "./ai.js";
 import { initInside } from "./inside.js";
 import { initHood } from "./hood.js";
+import { Escape } from "./escape.js";
 
 const $ = (id) => document.getElementById(id);
 const cfg = defaultConfig();
@@ -94,18 +95,34 @@ function ensureWorld() {
   }
   return world;
 }
+let escape = null;
+function setDescribe(on) { cfg.describe = on; $("describeBtn").classList.toggle("on", on); $("describeBtn").setAttribute("aria-pressed", on); }
 function loadScene(id, { shuffle = 0 } = {}) {
   ensureWorld();
+  const wasEscape = !!state.escape;
   state.scene = id;
   const def = SCENES[id]({ shuffle });
+  if (def.escape && !wasEscape) { state.escape = { prevMode: state.mode, prevDescribe: cfg.describe }; state.mode = "free"; }
+  if (!def.escape && wasEscape) { state.mode = state.escape.prevMode; setDescribe(state.escape.prevDescribe); state.escape = null; if (escape) escape.stop(); }
   world.load(def); world.setMode(state.mode);
   pipeline.reset(); replayPipeline.reset();
   state.worldReady = true;
   $("sceneTitle").textContent = def.title;
+  $("leftLabel").textContent = def.escape ? "Your eyes, low vision" : "Sighted";
+  $("walk").classList.toggle("escape", !!def.escape);
+  $("guideBtn").disabled = !!def.escape; $("trustBtn").disabled = !!def.escape;
+  $("guideBtn").classList.toggle("on", state.mode === "guide"); $("guideBtn").setAttribute("aria-pressed", state.mode === "guide");
   document.querySelectorAll("#sceneChips button").forEach(b => b.classList.toggle("on", b.dataset.scene === id));
-  setHint(state.mode === "guide" ? "Hold left to walk. Drag right to look." : "Left thumb walks. Right thumb looks.");
+  if (def.escape) {
+    setDescribe(true);   // the Halo names each new thing it sees: that is how the keys are found
+    if (!escape) escape = new Escape({ world, speech, ui: { panel: $("escPanel"), list: $("escList"), clock: $("escClock"), card: $("escCard"), cardTime: $("escTime"), cardLine: $("escLine") } });
+    escape.start(def);
+    setHint("Left thumb walks. Right thumb looks. Face a thing up close to pick it up.", 6000);
+  } else setHint(state.mode === "guide" ? "Hold left to walk. Drag right to look." : "Left thumb walks. Right thumb looks.");
   hood.setScene(def);
 }
+$("escAgain").addEventListener("click", () => { audio.prewarm(); loadScene("escape"); });
+$("escBack").addEventListener("click", () => loadScene("home"));
 document.querySelectorAll("#sceneChips button").forEach(b => b.addEventListener("click", () => loadScene(b.dataset.scene)));
 
 let hintTimer = 0;
@@ -126,7 +143,7 @@ $("guideBtn").addEventListener("click", () => {
   if (world) world.setMode(state.mode);
   setHint(state.mode === "guide" ? "Hold left to follow the route." : "Left thumb walks. Right thumb looks.");
 });
-$("describeBtn").addEventListener("click", () => { cfg.describe = !cfg.describe; $("describeBtn").classList.toggle("on", cfg.describe); $("describeBtn").setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
+$("describeBtn").addEventListener("click", () => { setDescribe(!cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
 $("sceneBtn").addEventListener("click", () => pipeline.speakScene());
 $("muteBtn").addEventListener("click", toggleMute);
 function toggleMute() { const m = speech.toggleMute(); $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").setAttribute("aria-label", m ? "Sound off" : "Sound on"); $("muteBtn").classList.toggle("on", m); if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
@@ -145,6 +162,7 @@ $("sosClose").addEventListener("click", () => $("sos").hidden = true);
 const inputState = { pointers: new Map(), maxPointers: 0, downAt: 0, moved: false, longTimer: 0, joyId: null, joyOrigin: null, lookId: null, lastLook: null };
 function attachWalkInput(el, side) {
   el.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button, .escape-card")) return;   // the result card's buttons take their own taps
     audio.prewarm(); el.setPointerCapture(e.pointerId);
     inputState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, side });
     if (inputState.pointers.size === 1) { inputState.downAt = performance.now(); inputState.moved = false; inputState.maxPointers = 0;
@@ -219,6 +237,7 @@ function frame(ts) {
   applyKeys();
   if (state.replay) { renderReplay(); return; }
   world.update(dt, now);
+  if (escape && escape.active) escape.update(dt);
   const l = world.lidar(); pipeline.pushLidar(l.cm, l.strength, now);
   const dets = world.detect(now);
   pipeline.step(dets, now);
@@ -233,12 +252,27 @@ function frame(ts) {
 }
 requestAnimationFrame(frame);
 
+const blurA = document.createElement("canvas"), blurB = document.createElement("canvas");
+/** Low vision without ctx.filter (Safari has none): shrink twice, stretch back with smoothing. */
+function drawBlurred(ctx, src, W, H) {
+  blurA.width = Math.max(8, Math.round(W / 4)); blurA.height = Math.max(6, Math.round(H / 4));
+  blurB.width = Math.max(4, Math.round(W / 22)); blurB.height = Math.max(3, Math.round(H / 22));
+  const a = blurA.getContext("2d"), b = blurB.getContext("2d");
+  a.imageSmoothingQuality = b.imageSmoothingQuality = ctx.imageSmoothingQuality = "high";
+  a.drawImage(src, 0, 0, blurA.width, blurA.height); b.drawImage(blurA, 0, 0, blurB.width, blurB.height);
+  a.drawImage(blurB, 0, 0, blurA.width, blurA.height); ctx.drawImage(blurA, 0, 0, W, H);
+}
 function drawHaloPane(pl) {
   const W = haloCanvas.width, H = haloCanvas.height;
   hctx.save();
-  hctx.drawImage(worldCanvas, 0, 0, W, H);
-  hctx.globalCompositeOperation = "saturation"; hctx.fillStyle = "#808080"; hctx.fillRect(0, 0, W, H);
-  hctx.globalCompositeOperation = "multiply"; hctx.fillStyle = "#b4b4b4"; hctx.fillRect(0, 0, W, H);
+  if (state.escape) {
+    drawBlurred(hctx, worldCanvas, W, H);
+    hctx.fillStyle = "rgba(0,0,0,0.12)"; hctx.fillRect(0, 0, W, H);
+  } else {
+    hctx.drawImage(worldCanvas, 0, 0, W, H);
+    hctx.globalCompositeOperation = "saturation"; hctx.fillStyle = "#808080"; hctx.fillRect(0, 0, W, H);
+    hctx.globalCompositeOperation = "multiply"; hctx.fillStyle = "#b4b4b4"; hctx.fillRect(0, 0, W, H);
+  }
   hctx.globalCompositeOperation = "source-over";
   const dpr = W / $("paneRight").clientWidth;
   hctx.scale(dpr, dpr);
@@ -340,4 +374,4 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (!hadController) return; if (state.room === "start" && !document.hidden) location.reload(); else pendingReload = true; });
   document.querySelectorAll("[data-room='start']").forEach(b => b.addEventListener("click", () => { if (pendingReload) setTimeout(() => location.reload(), 50); }));
 }
-window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, get live() { return live; }, loadScene, showRoom };
+window.__vantage = { cfg, state, speech, pipeline, get world() { return world; }, get live() { return live; }, get escape() { return escape; }, loadScene, showRoom };

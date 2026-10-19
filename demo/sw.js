@@ -1,15 +1,15 @@
 // Offline cache: after one load the demo runs without the venue Wi-Fi.
 // Page, styles and scripts: network first (a new deploy shows up on the next load), cache when
 // the network is slow or gone. Vendored engines, models, fonts and assets: cache first.
-const VERSION = "vantage-lens-v7";
+const VERSION = "vantage-lens-v8";
 const NETWORK_FIRST_MS = 3000;
 const PRECACHE = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
-  "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js", "js/live.js", "js/camera.js", "js/ai.js", "js/range.js", "js/ocr-prep.js", "js/detector.js",
+  "js/app.js", "js/halo.js", "js/audio.js", "js/overlay.js", "js/world.js", "js/props.js", "js/scenes.js", "js/reader.js", "js/inside.js", "js/hood.js", "js/live.js", "js/camera.js", "js/ai.js", "js/range.js", "js/ocr-prep.js", "js/detector.js", "js/wordcheck.js", "js/escape.js",
   "vendor/three/three.module.js", "vendor/three/OrbitControls.js", "vendor/three/GLTFLoader.js", "vendor/three/utils/BufferGeometryUtils.js",
   "assets/halo-visor.glb", "assets/halo-poster.jpg", "assets/logo-mark.png", "assets/parts/part-ai-camera.png", "assets/parts/part-cm5.png", "assets/parts/part-lidar.png", "assets/parts/part-nano-base.png", "assets/parts/part-openmove.png", "assets/parts/part-tof.png",
   "vendor/mediapipe/vision_bundle.js", "vendor/mediapipe/wasm/vision_wasm_internal.js", "vendor/mediapipe/wasm/vision_wasm_internal.wasm", "vendor/mediapipe/efficientdet_lite0_float16.tflite",
-  "vendor/tesseract/tesseract.min.js", "vendor/tesseract/worker.min.js", "vendor/tesseract/tesseract-core-simd-lstm.wasm.js", "vendor/tesseract/tesseract-core-lstm.wasm.js", "vendor/tesseract/eng.traineddata",
+  "vendor/tesseract/tesseract.min.js", "vendor/tesseract/worker.min.js", "vendor/tesseract/tesseract-core-simd-lstm.wasm.js", "vendor/tesseract/tesseract-core-lstm.wasm.js", "vendor/tesseract/eng.traineddata", "vendor/words/en.txt", "assets/jetson-orin-nano-super.svg",
 ];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then(c => Promise.allSettled(PRECACHE.map(u => c.add(u)))).then(() => self.skipWaiting()));

@@ -138,8 +138,52 @@ export function cafe({ shuffle = 0 } = {}) {
   };
 }
 
-export const SCENES = { home, street, cafe };
-export const ORDER = ["home", "street", "cafe"];
+// ----------------------------------------------------------------------------- LEAVING FOR WORK
+// The escape room: blurred sight, the Halo's boxes on top. Keys, the dog's breakfast and a
+// hundred dirhams before the front door opens. Where things are left changes every game.
+export function escape({ shuffle = 0 } = {}) {
+  const r = rng(shuffle || (Date.now() & 0xffffff)); const pick = (a) => a.splice(Math.floor(r() * a.length), 1)[0];
+  const props = [], items = [];
+  props.push(P.floor(7, 6, 0x9a8466, "planks", 1.4));
+  const wallH = 2.6;
+  props.push(place(P.wall(7, wallH, 0.15), 0, -3.0)); props.push(place(P.wall(7, wallH, 0.15), 0, 3.0));
+  props.push(place(P.wall(0.15, wallH, 6), -3.5, 0)); props.push(place(P.wall(0.15, wallH, 6), 3.5, 0));
+  // front door in the left wall, facing into the flat
+  const door = place(P.frontDoor(), -3.42, -1.7, Math.PI / 2); props.push(door);
+  // kitchen along the back wall, dining table, sofa corner, a console by the door, a dresser by the bedroom
+  props.push(place(P.counter(2.8), 1.9, -2.62));
+  props.push(place(P.table(1.4, 0.8), 1.3, 0.3));
+  props.push(place(P.chair(), 0.4, 0.3, Math.PI / 2)); props.push(place(P.chair(), 1.3, 1.05, Math.PI)); props.push(place(P.chair(), 2.2, 0.3, -Math.PI / 2));
+  props.push(place(P.couch(), -1.9, 2.45, Math.PI));
+  props.push(place(P.coffeeTable(), -1.9, 1.45));
+  props.push(place(P.sideboard(1.0, 0.8, 0.4), -3.22, 0.3, Math.PI / 2));
+  props.push(place(P.sideboard(0.9, 0.85, 0.45, 0xd8d0c2), 3.2, 2.35, -Math.PI / 2));
+  props.push(place(P.plant(), 3.0, -1.4)); props.push(place(P.plant(), -3.0, 2.6));
+  props.push(place(P.backpack(), 0.2, 2.6, 0.4));
+  // the dog, its bowl, and where its food might be
+  const dog = place(P.dogLying(), -2.35, -2.45, 0.6); props.push(dog);
+  const bowl = place(P.dogBowl(), -1.75, -2.6); props.push(bowl);
+  // surfaces things get left on: [x, y, z]
+  const spots = [[1.0, 0.77, 0.2], [1.75, 0.77, 0.45], [-1.75, 0.44, 1.4], [-3.22, 0.8, 0.5], [3.18, 0.85, 2.2], [2.7, 1.1, -2.55], [0.9, 1.1, -2.55]];
+  const put = (obj, id, at) => { obj.position.set(at[0], at[1], at[2]); obj.rotation.y = r() * Math.PI * 2; props.push(obj); items.push({ id, obj }); };
+  put(P.keys(), "keys", pick(spots));
+  put(P.wallet(), "wallet", pick(spots));
+  put(P.banknote(), "note", pick(spots));
+  const foodSpots = [[2.9, 0, -1.95], [0.35, 0, -2.2], [-0.9, 0, -2.6]];   // on the floor by the kitchen
+  const food = P.dogFood(); food.position.set(...pick(foodSpots)); food.rotation.y = r() * 0.8 - 0.4; props.push(food); items.push({ id: "food", obj: food });
+  items.push({ id: "bowl", obj: bowl }); items.push({ id: "dog", obj: dog }); items.push({ id: "door", obj: door, reach: 1.25 });
+  return {
+    id: "escape", title: "Leaving for work", props, actors: [], rail: null, items,
+    start: { x: 2.2, z: 2.0, yaw: 0.6 },
+    goal: { x: -3.0, z: -1.7, r: 0.8 },
+    bounds: { minX: -3.3, maxX: 3.3, minZ: -2.8, maxZ: 2.8 },
+    light: "morning-in", escape: true,
+    beats: ["Low vision: the picture is blurred", "Keys, wallet, a fifty-dirham note, the dog's food", "The Halo names what it sees"],
+  };
+}
+
+export const SCENES = { home, street, cafe, escape };
+export const ORDER = ["home", "street", "cafe", "escape"];
 
 // ----------------------------------------------------------------------------- actors
 

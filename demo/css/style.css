@@ -238,7 +238,7 @@ footer .foot-text { white-space: nowrap; overflow: hidden; text-overflow: ellips
 .twin-list .dot.working { background: var(--ok); } .twin-list .dot.integration { background: var(--amber); } .twin-list .dot.planned { background: transparent; border: 1px solid var(--line-strong); }
 .twin-labels { position: absolute; inset: 0; pointer-events: none; display: none; }
 .twin-labels.show { display: block; }
-.twin-label { position: absolute; left: 0; top: 0; transform: translate(-9999px, -9999px); margin-left: -4px; font-family: var(--mono); font-size: 10px; color: var(--fg); background: rgba(18,17,16,0.82); border: 1px solid var(--line-on-stage); border-left: 2px solid var(--line-strong); padding: 2px 7px; border-radius: var(--r-1); white-space: nowrap; pointer-events: auto; cursor: pointer; opacity: 0; }
+.twin-label { position: absolute; left: 0; top: 0; transform: translate(-9999px, -9999px); margin-left: -4px; font-family: var(--mono); font-size: 12px; color: var(--fg); background: rgba(18,17,16,0.82); border: 1px solid var(--line-on-stage); border-left: 2px solid var(--line-strong); padding: 2px 7px; border-radius: var(--r-1); white-space: nowrap; pointer-events: none; opacity: 0; }
 .twin-label[data-status=working] { border-left-color: var(--ok); } .twin-label[data-status=integration] { border-left-color: var(--amber); } .twin-label[data-status=planned] { border-left-color: var(--line-strong); }
 .twin-label.on { border-color: var(--fg); }
 .poster { position: absolute; inset: 0; background: #000; z-index: 4; display: grid; place-items: center; cursor: pointer; }
@@ -288,6 +288,10 @@ footer .foot-text { white-space: nowrap; overflow: hidden; text-overflow: ellips
   .live-stage { position: relative; inset: auto; }
   .live-side { position: static; width: auto; border: 0; border-top: var(--hair); border-radius: 0; background: var(--bg); }
   .live-status, .icon-btn.float { right: 0; }
+  .jetson-badge.live { bottom: 80px; }
+  .jetson-badge:not(.live) { top: 44px; }   /* under the pane's label, beside the checklist */
+  .jetson-badge { transform: scale(0.85); transform-origin: top right; }
+  .jetson-badge.live { transform-origin: bottom left; }
   .icon-btn.float { right: 10px; }
   .rooms button { padding: 0 12px; font-size: var(--fs-s); }
   .brand span { display: none; }
@@ -301,6 +305,32 @@ footer .foot-text { white-space: nowrap; overflow: hidden; text-overflow: ellips
   .start-wrap .row button { flex: 1; }
   .start-figure figcaption { display: none; }
 }
+/* ---------- Leaving for work: low vision, the Halo's boxes on top */
+#walk.escape #world { filter: blur(10px) saturate(0.85) brightness(0.9); transform: scale(1.04); }   /* scaled so the blur has no soft edge */
+.escape-panel { position: absolute; top: 48px; left: 10px; width: min(300px, 52%); background: rgba(5,5,5,0.80); border: 1px solid var(--line-on-stage); border-radius: var(--r-2); padding: 10px 12px; z-index: 2; pointer-events: none; }
+.escape-head { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+.escape-head b { font-size: var(--fs-m); color: var(--fg); letter-spacing: 0; font-weight: 500; }
+.escape-panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.escape-panel li { display: flex; gap: 9px; align-items: flex-start; font-size: var(--fs-s); line-height: 1.3; color: var(--fg); }
+.escape-panel li i { flex: none; width: 12px; height: 12px; margin-top: 3px; border: 1.5px solid var(--line-strong); border-radius: 2px; }
+.escape-panel li.done { color: var(--dim); }
+.escape-panel li.done span { text-decoration: line-through; text-decoration-color: var(--dim); }
+.escape-panel li.done i { background: var(--ok); border-color: var(--ok); }
+.escape-panel em { display: block; font-style: normal; font-family: var(--mono); font-size: var(--fs-xs); color: var(--amber); text-decoration: none; }
+.escape-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(380px, 88%); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-3); padding: 20px; z-index: 4; display: grid; gap: 8px; }
+.escape-card .label { margin: 0; }
+.escape-time { font-size: 44px; line-height: 1; color: var(--fg); }
+.escape-card .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+/* the compute badge: the corner of every live view */
+.jetson-badge { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; background: rgba(5,5,5,0.78); border: 1px solid var(--line-on-stage); border-radius: var(--r-2); pointer-events: none; }
+.jetson-badge img { width: 56px; height: 39px; display: block; }
+.jetson-badge span { display: grid; line-height: 1.15; }
+.jetson-badge small { font-family: var(--mono); font-size: 9px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--dim); }
+.jetson-badge b { font-size: var(--fs-s); font-weight: 600; color: var(--fg); }
+.jetson-badge em { font-style: normal; font-family: var(--mono); font-size: 10px; color: #8fc33a; }
+.jetson-badge.live { top: auto; right: auto; left: 10px; bottom: 84px; }   /* above the spoken line, clear of the range bar */
+#live .live-gate:not([hidden]) ~ .jetson-badge { display: none; }
 @media (max-width: 480px) {   /* a phone held upright: the four rooms, the sound and the settings must all fit on one line */
   .top { gap: 8px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .rooms { gap: 0; }

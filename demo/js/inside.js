@@ -186,7 +186,7 @@ export function initInside(el) {
     hint.textContent = "Drag to orbit. Pinch to zoom. Tap a part.";
   }, undefined, () => { hint.textContent = "Visor model did not load; showing the components."; });
 
-  let explode = 0, selected = null, raf = 0, running = false;
+  let explode = 0, selected = null, hovered = null, raf = 0, running = false;
   const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), tmp = new THREE.Vector3(), bb = new THREE.Box3();
 
   // list of every distinct part, grouped
@@ -195,6 +195,7 @@ export function initInside(el) {
     for (const p of parts.filter(p => p.def.group === group)) {
       const li = document.createElement("li"); li.innerHTML = `<span class="dot ${p.def.status}"></span>${p.def.title}`;
       li.addEventListener("click", () => { select(p); if (explode < 0.4) { slider.value = 700; slider.dispatchEvent(new Event("input", { bubbles: true })); } });
+      li.addEventListener("pointerenter", () => { hovered = p; }); li.addEventListener("pointerleave", () => { if (hovered === p) hovered = null; });
       p.li = li; list.appendChild(li);
     }
   }
@@ -215,13 +216,22 @@ export function initInside(el) {
     } else { card.root.hidden = true; hint.hidden = false; }
   }
   let downAt = null;
+  function partAt(cx, cy) {
+    const r = canvas.getBoundingClientRect(); ptr.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera); const hit = ray.intersectObjects(root.children, true).find(h => h.object.userData.part && h.object.visible);
+    return hit ? parts.find(p => p.def === hit.object.userData.part) : null;
+  }
+  // a name tag only for the part under the mouse (and the one tapped on a touch screen): the exploded view stays readable
+  let hoverQ = null;
+  canvas.addEventListener("pointermove", e => {
+    if (e.pointerType === "touch" || e.buttons) { hovered = null; return; }
+    hoverQ = [e.clientX, e.clientY];
+  });
+  canvas.addEventListener("pointerleave", () => { hovered = null; hoverQ = null; canvas.style.cursor = ""; });
   canvas.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY, performance.now()]; });
   canvas.addEventListener("pointerup", e => {
     if (!downAt) return; const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 8 || performance.now() - downAt[2] > 400; downAt = null; if (moved) return;
-    const r = canvas.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    ray.setFromCamera(ptr, camera); const hits = ray.intersectObjects(root.children, true);
-    const hit = hits.find(h => h.object.userData.part);
-    select(hit ? parts.find(p => p.def === hit.object.userData.part) : null);
+    select(partAt(e.clientX, e.clientY));
   });
   card.close.addEventListener("click", () => select(null));
   let lastExplode = 0;
@@ -244,22 +254,18 @@ export function initInside(el) {
   });
 
   function placeLabels() {
-    const w = canvas.clientWidth, h = canvas.clientHeight; const show = explode > 0.35;
-    labels.classList.toggle("show", show);
-    if (!show) return;
-    const placed = [];
+    if (hoverQ) { hovered = partAt(hoverQ[0], hoverQ[1]); canvas.style.cursor = hovered ? "pointer" : ""; hoverQ = null; }
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const show = new Set([hovered, selected].filter(Boolean));
+    labels.classList.toggle("show", show.size > 0);
     for (const p of parts) {
+      if (!show.has(p)) { p.label.style.display = "none"; continue; }
       bb.setFromObject(p.mesh); if (bb.isEmpty()) { p.label.style.display = "none"; continue; }
       bb.getCenter(tmp); tmp.y = bb.max.y; tmp.project(camera);
-      const x = (tmp.x + 1) / 2 * w; let y = (1 - tmp.y) / 2 * h - 10;
-      const vis = tmp.z < 1 && x > 0 && x < w && y > 112 && y < h - 60;
-      p.label.style.display = vis ? "block" : "none";
-      if (!vis) continue;
-      // nudge a label down when it would sit on one already placed
-      for (let k = 0; k < 6; k++) { const hit = placed.find(q => Math.abs(q.x - x) < 150 && Math.abs(q.y - y) < 20); if (!hit) break; y = hit.y + 20; }
-      placed.push({ x, y });
+      const x = Math.min(w - 160, Math.max(8, (tmp.x + 1) / 2 * w)), y = Math.min(h - 60, Math.max(112, (1 - tmp.y) / 2 * h - 12));
+      p.label.style.display = tmp.z < 1 ? "block" : "none";
       p.label.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px)`;
-      p.label.style.opacity = Math.min(1, (explode - 0.35) / 0.3);
+      p.label.style.opacity = 1;
     }
   }
   function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }

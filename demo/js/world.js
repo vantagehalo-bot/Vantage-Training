@@ -48,6 +48,7 @@ export class World {
       evening: { sky: 0xffe2c0, ground: 0x3a2d22, hemi: 0.55, sun: 0xffc080, sunI: 1.1, sunPos: [-3, 4, 2], bg: 0x1b1611, fog: 0x1b1611 },
       morning: { sky: 0xcfe6ff, ground: 0x6a6a60, hemi: 0.8, sun: 0xfff2d8, sunI: 1.6, sunPos: [5, 10, 3], bg: 0xbcd3ea, fog: 0xbcd3ea },
       indoor: { sky: 0xfff4e6, ground: 0x4a4038, hemi: 0.7, sun: 0xffe8c8, sunI: 0.9, sunPos: [2, 5, 2], bg: 0x241f1b, fog: 0x241f1b },
+      "morning-in": { sky: 0xfff6ea, ground: 0x5a5046, hemi: 0.95, sun: 0xfff0d8, sunI: 1.2, sunPos: [3, 6, 2], bg: 0x2a2520, fog: 0x2a2520 },
     }[def.light] || {};
     scene.background = new THREE.Color(lights.bg ?? 0x202020);
     scene.fog = new THREE.Fog(lights.fog ?? 0x202020, 14, 30);
@@ -219,6 +220,10 @@ export class World {
         minX = Math.min(minX, sx); maxX = Math.max(maxX, sx); minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
       }
       if (minX > 1e8) continue;
+      if (p.userData.small) {   // a set of keys is a few pixels tall: the fine-tuned model still boxes it, a little generously
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, hw = Math.max(9, (maxX - minX) / 2), hh = Math.max(9, (maxY - minY) / 2);
+        minX = cx - hw; maxX = cx + hw; minY = cy - hh; maxY = cy + hh;
+      }
       const fullW = maxX - minX, fullH = maxY - minY;
       const x0 = Math.max(0, minX), y0 = Math.max(0, minY), x1 = Math.min(W, maxX), y1 = Math.min(H, maxY);
       const w = x1 - x0, h = y1 - y0;

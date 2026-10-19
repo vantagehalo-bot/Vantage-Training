@@ -25,6 +25,7 @@ export const SAFETY_CRITICAL_LABELS = new Set([
 export const SPOKEN_NAMES = {
   "tv": "TV", "cell phone": "phone", "dining table": "table",
   "potted plant": "plant", "hair drier": "hair dryer", "sports ball": "ball",
+  "banknote": "money",   // the escape room's custom class
 };
 
 // Config defaults, same values as the dataclass in vantage_core.py.

@@ -238,3 +238,73 @@ export function shelf(w = 2.0) {
   }
   return g;
 }
+
+// ----------------------------------------------------------------------------- "Leaving for work"
+// Small things a blind person hunts for every morning. The detector is given custom classes
+// for them (keys, wallet, banknote, dog food), the way the Halo's own model would be fine-tuned.
+const small = (label, conf = [0.8, 0.95]) => group(label, conf, { solid: false, small: true });
+
+export function keys() {
+  const g = small("keys"); const steel = mat(0xc9ccd0, { roughness: 0.3, metalness: 0.8 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.004, 6, 16), steel); ring.rotation.x = Math.PI / 2; ring.position.y = 0.005; g.add(ring);
+  g.add(box(0.075, 0.006, 0.018, steel, 0.05, 0.004, 0.012)); g.add(box(0.065, 0.006, 0.016, mat(0xb08d3c, { metalness: 0.7, roughness: 0.35 }), 0.045, 0.004, -0.016));
+  g.add(box(0.045, 0.014, 0.03, mat(0xd2462e), -0.045, 0.008, 0));   // the red fob
+  return g;
+}
+export function wallet() {
+  const g = small("wallet"); g.add(box(0.115, 0.022, 0.09, mat(0x5a3a24, { roughness: 0.7 }), 0, 0.011, 0)); g.add(box(0.116, 0.002, 0.004, mat(0x3a2416), 0, 0.022, 0)); return g;
+}
+/** A fifty-dirham note: violet, with the denomination printed large. */
+export function banknote() {
+  const g = small("banknote");
+  const cvs = document.createElement("canvas"); cvs.width = 256; cvs.height = 120; const c = cvs.getContext("2d");
+  c.fillStyle = "#8a6aa6"; c.fillRect(0, 0, 256, 120); c.fillStyle = "#6b4d88"; c.fillRect(0, 0, 256, 18); c.fillRect(0, 102, 256, 18);
+  c.fillStyle = "#f3eaf7"; c.font = "700 54px Helvetica, Arial"; c.fillText("50", 18, 82); c.font = "600 20px Helvetica, Arial"; c.fillText("FIFTY DIRHAMS", 100, 68);
+  const tex = new THREE.CanvasTexture(cvs); tex.colorSpace = THREE.SRGBColorSpace;
+  const note = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.002, 0.07), [mat(0x8a6aa6), mat(0x8a6aa6), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }), mat(0x8a6aa6), mat(0x8a6aa6), mat(0x8a6aa6)]);
+  note.position.y = 0.002; note.rotation.y = 0.35; g.add(note); return g;
+}
+export function dogFood() {
+  const g = small("dog food", [0.75, 0.92]);
+  const cvs = document.createElement("canvas"); cvs.width = 128; cvs.height = 180; const c = cvs.getContext("2d");
+  c.fillStyle = "#d9822b"; c.fillRect(0, 0, 128, 180); c.fillStyle = "#fff"; c.font = "700 26px Helvetica, Arial"; c.fillText("DOG", 34, 62); c.fillText("FOOD", 26, 92);
+  c.beginPath(); c.arc(64, 136, 22, 0, Math.PI * 2); c.fillStyle = "#7a3f12"; c.fill();
+  const tex = new THREE.CanvasTexture(cvs); tex.colorSpace = THREE.SRGBColorSpace; const side = mat(0xc87322);
+  const bag = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.36, 0.12), [side, side, side, side, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }), side]);
+  bag.position.y = 0.18; bag.castShadow = true; g.add(bag); return g;
+}
+export function dogBowl() {
+  const g = group("bowl", [0.7, 0.9], { solid: false }); const steel = mat(0xb9bec4, { roughness: 0.25, metalness: 0.8 });
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.07, 20, 1, true), steel); b.position.y = 0.035; b.material.side = THREE.DoubleSide; g.add(b);
+  g.add(cyl(0.1, 0.005, steel, 0, 0.003, 0, 20));
+  const food = cyl(0.105, 0.02, mat(0x7a4a22, { roughness: 0.95 }), 0, 0.045, 0, 16); food.visible = false; food.name = "kibble"; g.add(food);
+  return g;
+}
+/** A dog lying by its bowl: it gets up and eats once the bowl is filled. */
+export function dogLying() {
+  const g = group("dog", [0.6, 0.85]); const m = mat(PALETTE.dog);
+  g.add(box(0.5, 0.18, 0.24, m, 0, 0.12, 0)); g.add(box(0.16, 0.15, 0.16, m, 0.3, 0.2, 0)); g.add(box(0.06, 0.05, 0.2, m, -0.3, 0.08, 0.06));
+  g.add(box(0.14, 0.05, 0.06, m, 0.24, 0.03, 0.09)); g.add(box(0.14, 0.05, 0.06, m, 0.24, 0.03, -0.09));
+  return g;
+}
+/** The flat's front door: solid wood, a lever handle. */
+export function frontDoor(w = 0.95, h = 2.1) {
+  const g = group("door", [0.7, 0.9]); const wood = mat(0x6e4b2e, { roughness: 0.6 }), frame = mat(0xe8e2d6);
+  g.add(box(w + 0.12, 0.08, 0.12, frame, 0, h + 0.04, 0)); g.add(box(0.06, h, 0.12, frame, -w / 2 - 0.03, h / 2, 0)); g.add(box(0.06, h, 0.12, frame, w / 2 + 0.03, h / 2, 0));
+  g.add(box(w, h, 0.05, wood, 0, h / 2, 0));
+  for (const y of [0.55, 1.45]) g.add(box(w - 0.24, 0.6, 0.012, mat(0x5e3f26, { roughness: 0.6 }), 0, y, 0.03));
+  g.add(box(0.13, 0.025, 0.04, mat(0xc9ccd0, { metalness: 0.8, roughness: 0.3 }), w / 2 - 0.14, 1.0, 0.06));
+  return g;
+}
+/** Low cabinet: a surface to leave things on. */
+export function sideboard(w = 1.0, h = 0.8, d = 0.4, color = 0xb89b74) {
+  const g = group(null, null); const m = mat(color, { roughness: 0.6 });
+  g.add(box(w, h, d, m, 0, h / 2, 0)); g.add(box(w - 0.02, 0.01, 0.005, mat(0x6b5a44), 0, h * 0.55, d / 2 + 0.003));
+  g.userData.top = h; return g;
+}
+export function coffeeTable() {
+  const g = group(null, null); const m = mat(PALETTE.wood);
+  g.add(box(1.0, 0.04, 0.55, m, 0, 0.42, 0));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.05, 0.4, 0.05, m, sx * 0.45, 0.2, sz * 0.22));
+  g.userData.top = 0.44; return g;
+}

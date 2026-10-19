@@ -90,12 +90,23 @@
   <div class="panes">
     <div class="pane left" id="paneLeft">
       <canvas id="world"></canvas>
-      <div class="hud-label">Sighted · <span id="sceneTitle"></span></div>
+      <div class="hud-label"><span id="leftLabel">Sighted</span> · <span id="sceneTitle"></span></div>
       <div class="joy" id="joy"><div class="knob"></div></div>
       <div class="hint" id="walkHint">Hold left to walk</div>
+      <div class="escape-panel" id="escPanel" hidden>
+        <div class="escape-head"><span>Before you leave</span><b class="mono" id="escClock">0:00</b></div>
+        <ul id="escList"></ul>
+      </div>
+      <div class="jetson-badge" aria-label="Powered by Jetson Nano"><img src="assets/jetson-orin-nano-super.svg" alt=""><span><small>Powered by</small><b>Jetson Nano</b><em>Orin Nano Super</em></span></div>
     </div>
     <div class="pane right" id="paneRight">
       <canvas id="halo"></canvas>
+      <div class="escape-card" id="escCard" hidden>
+        <p class="label">Out of the door</p>
+        <p class="escape-time mono" id="escTime">0:00</p>
+        <p id="escLine"></p>
+        <div class="row"><button class="primary" id="escAgain">Play again</button><button class="secondary" id="escBack">Back to the walk</button></div>
+      </div>
     </div>
   </div>
   <div class="bar walkbar">
@@ -103,6 +114,7 @@
       <button data-scene="home" class="on">Home</button>
       <button data-scene="street">Street</button>
       <button data-scene="cafe">Café</button>
+      <button data-scene="escape">Leaving for work</button>
     </div>
     <div class="spacer"></div>
     <button id="guideBtn" class="switch on" aria-pressed="true">Guide</button>
@@ -162,6 +174,7 @@
         <div class="zoom" id="zoomLabel">1×</div>
       </div>
       <button id="torchBtn" class="icon-btn float" aria-label="Light" aria-pressed="false" hidden><svg><use href="#i-torch"/></svg></button>
+      <div class="jetson-badge live" aria-label="Powered by Jetson Nano"><img src="assets/jetson-orin-nano-super.svg" alt=""><span><small>Powered by</small><b>Jetson Nano</b><em>Orin Nano Super</em></span></div>
       <div class="live-status mono" id="liveStatus">CAMERA OFF</div>
     </div>
     <aside class="live-side" id="liveSide">

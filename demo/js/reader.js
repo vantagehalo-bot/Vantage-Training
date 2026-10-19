@@ -4,6 +4,7 @@
 // sentence. When it cannot read, it says why, in the reader's own words.
 import * as audio from "./audio.js";
 import { prepareForOcr, OCR_PARAMS, RECOGNIZE_OUTPUT } from "./ocr-prep.js";
+import { loadWords, cleanLine, isKnown } from "./wordcheck.js";
 
 const STEADY_S = 0.7, MIN_CONF = 60, READ_COOLDOWN_S = 3.5, MIN_XHEIGHT_PX = 8, TORCH_BELOW = 70, PAGE_GONE_S = 1.5;
 export const COACH = {
@@ -132,10 +133,12 @@ export class Reader {
           if (text) { this.present(text, { source: "model", conf: 95 }); return; }
         } catch (e) { this.setStatus(`Model unavailable (${e.message}); reading on the device.`); }
       }
+      loadWords().catch(() => {});   // the dictionary that keeps invented words out; confidence alone if it fails
       const workerP = this.ensureWorker(); workerP.catch(() => {});   // loads while the frame is prepared; an early return must not leave it unhandled
       const prepared = prepareForOcr(best.c);
       // the print is too small for the engine: say so instead of reading noise
-      if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX) { this.say(COACH.small); this.setStatus(COACH.small); return; }
+      // (the estimate counts background texture too, so only a clearly tiny reading stops here)
+      if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX * 0.6) { this.say(COACH.small); this.setStatus(COACH.small); return; }
       let worker;
       try { worker = await workerP; } catch (e) { this.setStatus("The reader could not load (" + (e && e.message || e) + "). Check the connection and try again."); return; }
       if (!st.running) return;
@@ -146,14 +149,18 @@ export class Reader {
       const words = allWords.filter(w => w.text.trim() && /[A-Za-z0-9]/.test(w.text));
       const good = words.filter(w => w.confidence >= MIN_CONF - 15);
       const k = prepared.scale;
-      st.lastBoxes = { boxes: words.map(w => ({ x0: w.bbox.x0 / k + prepared.offsetX, y0: w.bbox.y0 / k + prepared.offsetY, x1: w.bbox.x1 / k + prepared.offsetX, y1: w.bbox.y1 / k + prepared.offsetY, conf: w.confidence })), W: best.c.width, H: best.c.height };
+      st.lastBoxes = { boxes: words.map(w => ({ x0: w.bbox.x0 / k + prepared.offsetX, y0: w.bbox.y0 / k + prepared.offsetY, x1: w.bbox.x1 / k + prepared.offsetX, y1: w.bbox.y1 / k + prepared.offsetY, conf: isKnown(w.text, w.confidence) ? w.confidence : 0 })), W: best.c.width, H: best.c.height };   // red: dropped as not a word
       if (good.length < 2) { this.coach(); return; }
       const meanConf = good.reduce((a, w) => a + w.confidence, 0) / good.length;
-      const medH = median(good.map(w => w.bbox.y1 - w.bbox.y0)) / k;   // word boxes run ascender to descender, about 1.5 x-heights
+      await Promise.race([loadWords().catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
+      const real = good.filter(w => isKnown(w.text, w.confidence) && /[A-Za-z]{2,}/.test(w.text));
+      const medH = median((real.length >= 2 ? real : good).map(w => w.bbox.y1 - w.bbox.y0)) / k;   // word boxes run ascender to descender, about 1.5 x-heights
       if (medH < MIN_XHEIGHT_PX * 1.2) { this.say(COACH.small); this.setStatus(COACH.small); return; }
-      const lines = allLines.map(l => ({ text: l.text.replace(/\s+/g, " ").trim(), conf: l.confidence, words: l.words.filter(w => w.confidence >= MIN_CONF - 15).length }))
-        .filter(l => l.text.length >= 2 && l.words >= 1 && /[A-Za-z0-9]{2,}/.test(l.text) && (l.text.match(/[A-Za-z0-9 .,;:'"!?()\-\/%€$£]/g) || []).length / l.text.length > 0.75);
-      this.present(lines.map(l => l.text).join("\n"), { source: "device", conf: meanConf });
+      await Promise.race([loadWords().catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
+      // only real words, numbers, units and codes are read out; a line that is mostly invented is dropped whole
+      const lines = allLines.map(l => cleanLine(l.words || [])).filter(Boolean);
+      if (!lines.length) { this.coach(); return; }
+      this.present(lines.join("\n"), { source: "device", conf: meanConf });
     } catch (e) {
       this.setStatus("The reader hit a problem: " + (e && e.message || e));
     } finally { st.busy = false; this.onBusy(false); }

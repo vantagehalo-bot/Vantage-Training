@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" role="img" aria-label="Jetson Orin Nano Super developer kit">
+  <defs>
+    <linearGradient id="pcb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2321"/><stop offset="1" stop-color="#141716"/></linearGradient>
+    <linearGradient id="sink" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3d40"/><stop offset="1" stop-color="#17191b"/></linearGradient>
+    <radialGradient id="fan" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#2b2e31"/><stop offset="1" stop-color="#0d0e0f"/></radialGradient>
+    <linearGradient id="port" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d7dadd"/><stop offset="1" stop-color="#8d9297"/></linearGradient>
+  </defs>
+  <!-- carrier board in three-quarter view -->
+  <path d="M18 52 L132 22 L188 60 L74 96 Z" fill="url(#pcb)" stroke="#3b403d" stroke-width="1"/>
+  <path d="M18 52 L74 96 L74 104 L18 60 Z" fill="#0c0d0d"/>
+  <path d="M74 96 L188 60 L188 68 L74 104 Z" fill="#101211"/>
+  <!-- mounting holes -->
+  <g fill="#b8963c"><circle cx="30" cy="52" r="2.2"/><circle cx="128" cy="27" r="2.2"/><circle cx="178" cy="60" r="2.2"/><circle cx="76" cy="90" r="2.2"/></g>
+  <!-- 40-pin header -->
+  <g fill="#c9a640">
+    <circle cx="40" cy="49" r="0.9"/><circle cx="44" cy="48" r="0.9"/><circle cx="48" cy="47" r="0.9"/><circle cx="52" cy="46" r="0.9"/><circle cx="56" cy="45" r="0.9"/><circle cx="60" cy="44" r="0.9"/><circle cx="64" cy="43" r="0.9"/><circle cx="68" cy="42" r="0.9"/><circle cx="72" cy="41" r="0.9"/><circle cx="76" cy="40" r="0.9"/>
+    <circle cx="42" cy="51" r="0.9"/><circle cx="46" cy="50" r="0.9"/><circle cx="50" cy="49" r="0.9"/><circle cx="54" cy="48" r="0.9"/><circle cx="58" cy="47" r="0.9"/><circle cx="62" cy="46" r="0.9"/><circle cx="66" cy="45" r="0.9"/><circle cx="70" cy="44" r="0.9"/><circle cx="74" cy="43" r="0.9"/><circle cx="78" cy="42" r="0.9"/>
+  </g>
+  <!-- module heatsink with fins -->
+  <path d="M62 58 L118 43 L152 66 L96 82 Z" fill="url(#sink)" stroke="#4a4e52" stroke-width="0.8"/>
+  <path d="M62 58 L96 82 L96 70 L62 46 Z" fill="#222527"/>
+  <path d="M96 82 L152 66 L152 54 L96 70 Z" fill="#1a1c1e"/>
+  <path d="M62 46 L118 31 L152 54 L96 70 Z" fill="url(#sink)" stroke="#55595e" stroke-width="0.8"/>
+  <g stroke="#2a2d30" stroke-width="1.1">
+    <line x1="69" y1="44" x2="103" y2="68"/><line x1="76" y1="42" x2="110" y2="66"/><line x1="83" y1="40" x2="117" y2="64"/><line x1="90" y1="38" x2="124" y2="62"/><line x1="97" y1="36" x2="131" y2="60"/><line x1="104" y1="34" x2="138" y2="58"/><line x1="111" y1="32" x2="145" y2="56"/>
+  </g>
+  <!-- fan -->
+  <ellipse cx="107" cy="50" rx="21" ry="12.5" fill="url(#fan)" stroke="#5c6166" stroke-width="0.8"/>
+  <g fill="#3c4044">
+    <path d="M107 50 Q99 41 92 46 Q100 47 107 50Z"/><path d="M107 50 Q118 43 123 49 Q114 48 107 50Z"/><path d="M107 50 Q112 59 104 61 Q106 55 107 50Z"/><path d="M107 50 Q95 56 90 52 Q99 52 107 50Z"/><path d="M107 50 Q120 55 118 58 Q112 53 107 50Z"/>
+  </g>
+  <ellipse cx="107" cy="50" rx="4.5" ry="2.7" fill="#76b900"/>
+  <!-- rear ports: USB-A stack, DisplayPort, Ethernet, USB-C, DC barrel -->
+  <g>
+    <path d="M140 72 L152 68 L152 60 L140 64 Z" fill="url(#port)"/><path d="M140 72 L144 75 L156 71 L152 68 Z" fill="#6f7479"/>
+    <path d="M156 66 L168 62 L168 54 L156 58 Z" fill="url(#port)"/><path d="M156 66 L160 69 L172 65 L168 62 Z" fill="#6f7479"/>
+    <path d="M124 77 L134 74 L134 69 L124 72 Z" fill="#1b1d1f" stroke="#8d9297" stroke-width="0.7"/>
+    <path d="M108 82 L120 78 L120 70 L108 74 Z" fill="#c9ccd0"/><rect x="111" y="75" width="5" height="3" fill="#2c6e1f" transform="skewY(-18) translate(0 37)"/>
+    <path d="M96 85 L104 83 L104 79 L96 81 Z" fill="#b5b9bd"/>
+    <ellipse cx="88" cy="85" rx="3.4" ry="2.6" fill="#0e0f10" stroke="#8d9297" stroke-width="0.7"/>
+  </g>
+  <!-- status LED -->
+  <circle cx="170" cy="70" r="1.4" fill="#76b900"/>
+</svg>
