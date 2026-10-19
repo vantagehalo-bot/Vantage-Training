@@ -9,6 +9,8 @@ import { Camera } from "./camera.js";
 import { Reader } from "./reader.js";
 import { rangeCm } from "./range.js";
 import * as ai from "./ai.js";
+import { getLang, isAr, onLang, tr } from "./lang.js";
+import { AR } from "./arabic.js";
 
 const LIVE_THRESHOLD = 0.32;   // EfficientDet-Lite0 scores sit lower than the device network's 0.55
 const ASK_TIMEOUT_MS = 25000, DETECTOR_RETRY_S = 15, LISTEN_MAX_MS = 8000;
@@ -26,7 +28,10 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
       const blob = await new Promise(r => small.toBlob(r, "image/jpeg", 0.8));
       const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
       const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ASK_TIMEOUT_MS) : undefined;
-      const r = await ai.ask({ key: ai.getKey(), question: "Read all the text in this picture exactly as printed, in reading order, one line per printed line. Output only the text.", frame: { b64 }, context: "", detail: true, signal });
+      const question = isAr()
+        ? "اقرأ كل النص الموجود في هذه الصورة بترتيب القراءة، سطرًا مقابل كل سطر مطبوع. إن كان النص بالعربية فاقرأه كما هو، وإن كان بلغة أخرى فقدّم ترجمة عربية أمينة له. اكتب النص فقط."
+        : "Read all the text in this picture exactly as printed, in reading order, one line per printed line. Output only the text.";
+      const r = await ai.ask({ key: ai.getKey(), question, frame: { b64 }, context: "", detail: true, signal, lang: getLang() });
       return r.text.replace(/\s*[|•]\s*/g, "\n");
     },
   };
@@ -152,19 +157,22 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     det.hazard.textContent = !hz || hz.level === Level.UNKNOWN ? "NO RANGE" : hz.level === Level.CRITICAL ? `TOO CLOSE${dist}` : hz.level === Level.CAUTION ? `AHEAD${dist}` : "CLEAR";
     det.hazard.dataset.level = hz ? hz.level : 0;
   }
-  det.describe.addEventListener("click", () => { cfg.describe = !cfg.describe; det.describe.classList.toggle("on", cfg.describe); det.describe.setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
+  det.describe.addEventListener("click", () => { cfg.describe = !cfg.describe; det.describe.classList.toggle("on", cfg.describe); det.describe.setAttribute("aria-pressed", cfg.describe); speech.say(cfg.describe ? tr("Describe mode on", AR.describeOn) : tr("Describe mode off", AR.describeOff), Priority.INFO, false, 3); });
   det.scene.addEventListener("click", () => pipeline.speakScene());
 
   // ------------------------------------------------------------ ask
   function renderChips() {
     ask.chips.innerHTML = "";
     ai.QUESTIONS.forEach((q, i) => {
-      const b = document.createElement("button"); b.className = "chip"; b.textContent = q.text; b.dataset.id = q.id; b.dataset.n = String(i + 1);
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = isAr() ? q.ar : q.text; b.dataset.id = q.id; b.dataset.n = String(i + 1);
+      if (isAr()) { b.lang = "ar"; b.dir = "rtl"; }
       b.addEventListener("click", () => { ask.chips.querySelectorAll(".chip").forEach(c => c.classList.remove("last")); b.classList.add("last"); askQuestion(q); });
       ask.chips.appendChild(b);
     });
   }
   renderChips();
+  const langInput = () => { ask.input.dir = isAr() ? "rtl" : "auto"; ask.input.placeholder = tr("Or type a question", "أو اكتب سؤالًا"); };
+  onLang(() => { renderChips(); langInput(); }); langInput();
   function keyLine() {
     const has = !!ai.getKey();
     ask.keyNote.textContent = has ? "Answers come from Google's Gemini on its free tier. One frame leaves the tablet per question; Google may use free-tier requests to improve its products." : "No vision key. Answers come from the on-device detector; add a Gemini key in Settings for scene answers.";
@@ -173,7 +181,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
   keyLine();
   async function askQuestion(q) {
     if (st.asking) return;
-    const text = typeof q === "string" ? q : q.text;
+    const text = typeof q === "string" ? q : (isAr() ? q.ar : q.text);
     if (!camera.running) { addTurn(text, "Open the camera first."); return; }
     if (q.mode === "read" || /^read\b/i.test(text)) { setMode("read"); setTimeout(() => reader.capture(), 350); addTurn(text, "READING", { pending: true }); return; }
     const key = ai.getKey();
@@ -186,24 +194,25 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
         const detail = !!(q.detail);
         const frame = await camera.jpeg(detail ? 1024 : 768, detail ? 0.75 : 0.65);
         const signal = typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ASK_TIMEOUT_MS) : undefined;
-        const r = await ai.ask({ key, question: text, frame, context, detail, signal });
+        const r = await ai.ask({ key, question: text, frame, context, detail, signal, lang: getLang() });
         answer = r.text; meta = `${r.model.replace("gemini-", "GEMINI ").replace(/-/g, " ")} · ${(r.ms / 1000).toFixed(1)} s`;
       } else {
-        answer = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg }) || "That needs the vision model. Add a free Gemini key in Settings.";
+        answer = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg, lang: getLang() })
+          || tr("That needs the vision model. Add a free Gemini key in Settings.", "هذا السؤال يحتاج إلى نموذج الرؤية. يُرجى إضافة مفتاح جيميناي المجاني في الإعدادات.");
         meta = "ON-DEVICE";
       }
       setTurn(turn, answer, meta);
       speech.say(answer, Priority.INFO, false, 30);
     } catch (e) {
       const why = ai.explainError(e);
-      const fallback = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg });
+      const fallback = ai.localAnswer(q, { tracks: pipeline.tracks, hazard: pipeline.hazard, frameW: cfg.width, cfg, lang: getLang() });
       setTurn(turn, fallback ? `${fallback}` : `Model unavailable: ${why}.`, fallback ? `ON-DEVICE · MODEL ${why.toUpperCase()}` : "");
       if (fallback) speech.say(fallback, Priority.INFO, false, 30);
     } finally { st.asking = null; }
   }
   function addTurn(q, a, { pending = false } = {}) {
     const li = document.createElement("li"); li.className = "turn" + (pending ? " pending" : "");
-    li.innerHTML = `<p class="q">${esc(q)}</p><p class="a">${esc(a)}</p><span class="meta"></span>`;
+    li.innerHTML = `<p class="q" dir="auto">${esc(q)}</p><p class="a" dir="auto">${esc(a)}</p><span class="meta"></span>`;
     ask.log.prepend(li); while (ask.log.children.length > 8) ask.log.lastChild.remove();
     return li;
   }
@@ -218,7 +227,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     const stopListening = () => { listening = false; clearTimeout(silence); ask.mic.classList.remove("on"); ask.input.placeholder = "Or type a question"; };
     ask.mic.addEventListener("click", () => {
       if (listening) { try { rec.stop(); } catch (_) {} return; }
-      rec = rec || new SR(); rec.lang = "en-US"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
+      rec = rec || new SR(); rec.lang = isAr() ? "ar-AE" : "en-US"; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
       heard = ""; listening = true; ask.mic.classList.add("on"); ask.input.placeholder = "Listening";
       silence = setTimeout(() => { try { rec.stop(); } catch (_) {} }, LISTEN_MAX_MS);
       rec.onresult = (ev) => {
@@ -252,7 +261,7 @@ export function initLive(el, { cfg, pipeline, speech, hood }) {
     await camera.setZoom(z0);
     if (st.zoom !== z0) return;
     video.style.transform = camera._hwZoom > 1 ? "" : `scale(${st.zoom})`;
-    if (st.zoom !== 1) speech.say(`Zoom ${st.zoom % 1 ? st.zoom.toFixed(1) : st.zoom} times`, Priority.INFO, false, 3);
+    if (st.zoom !== 1) speech.say(isAr() ? AR.zoom(st.zoom) : `Zoom ${st.zoom % 1 ? st.zoom.toFixed(1) : st.zoom} times`, Priority.INFO, false, 3);
   }
 
   function onResize() { if (camera.running && st.mode !== "read") draw(); }

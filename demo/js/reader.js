@@ -5,6 +5,8 @@
 import * as audio from "./audio.js";
 import { prepareForOcr, OCR_PARAMS, RECOGNIZE_OUTPUT } from "./ocr-prep.js";
 import { loadWords, cleanLine, isKnown } from "./wordcheck.js";
+import { isAr, tr } from "./lang.js";
+import { AR } from "./arabic.js";
 
 const STEADY_S = 0.7, MIN_CONF = 60, READ_COOLDOWN_S = 3.5, MIN_XHEIGHT_PX = 8, TORCH_BELOW = 70, PAGE_GONE_S = 1.5;
 export const COACH = {
@@ -15,6 +17,15 @@ export const COACH = {
   small: "The text is too small. Pinch to zoom in, or move a little closer.",
   none: "No text in frame.",
 };
+const COACH_AR = {
+  dark: "الإضاءة خافتة جدًا للقراءة. يُرجى تشغيل ضوء أو الاقتراب من نافذة.",
+  glare: "هناك وهج على النص. يُرجى إمالته قليلًا بعيدًا عن الضوء.",
+  close: "النص قريب جدًا. يُرجى إبعاده قليلًا.",
+  blur: "الصورة غير واضحة. يُرجى تثبيت اليد، أو إبعاد النص قليلًا.",
+  small: "النص صغير جدًا. يُرجى التكبير بإصبعين، أو الاقتراب قليلًا.",
+  none: "لا يوجد نص في الصورة.",
+};
+const coachText = (k) => (isAr() ? COACH_AR : COACH)[k];
 
 export class Reader {
   constructor({ camera, overlay, out, status, meters, zoomLabel, buttons, onBusy = () => {}, ai = null, isMuted = () => false, onTorch = () => {} }) {
@@ -71,7 +82,7 @@ export class Reader {
       // where the text sits, as fractions of the frame: the burst picks its sharpest frame there
       if (rows.length >= 3) { let x0 = W, x1 = 0; for (const r of rows) { x0 = Math.min(x0, r[1]); x1 = Math.max(x1, r[2]); } st.textRect = { x: x0 / W, y: rows[0][0] / H, w: (x1 - x0) / W, h: (rows[rows.length - 1][0] - rows[0][0] + 2) / H }; }
       // a page taken out of view for a moment means the next one is new, even if it says the same
-      if (text < 0.04) { if (!st.goneSince) st.goneSince = now; else if (now - st.goneSince > PAGE_GONE_S && st.readLines.size) st.readLines.clear(); } else st.goneSince = 0;
+      if (text < 0.04) { if (!st.goneSince) st.goneSince = now; else if (now - st.goneSince > PAGE_GONE_S) { if (st.readLines.size) st.readLines.clear(); st.modelArmed = true; st.pageDone = false; } } else st.goneSince = 0;
       // noise and blur, not shading, are what break OCR: light the page when the camera offers a torch
       if (this.camera.hasTorch && st.auto) {
         if (light < TORCH_BELOW && !st.torchAuto) { if (!st.dimSince) st.dimSince = now; else if (now - st.dimSince > 1.0) this.torch(true); }
@@ -81,7 +92,7 @@ export class Reader {
       this.meter(this.meters.light, Math.min(1, light / 160), light > 60 && light < 235 ? "" : "var(--amber)");
       this.meter(this.meters.steady, steadyFrac, steadyFrac >= 1 ? "" : "var(--muted)");
       this.drawLive(rows, W, H);
-      if (st.auto && !st.busy && !st.speaking && steadyFrac >= 1 && text > 0.12 && sharp > 7 && now - st.lastRead > READ_COOLDOWN_S) this.capture();
+      if (st.auto && !st.busy && !st.speaking && steadyFrac >= 1 && text > 0.12 && sharp > 7 && now - st.lastRead > READ_COOLDOWN_S && !st.pageDone) this.capture({ auto: true });
     }
     st.timer = setTimeout(() => this.analyse(), 120);
   }
@@ -113,9 +124,9 @@ export class Reader {
   }
 
   // ---- capture → OCR → speak
-  async capture({ viaModel = true, manual = false } = {}) {
+  async capture({ viaModel = true, manual = false, auto = false } = {}) {
     const st = this.st; if (st.busy || !this.camera.running) return;
-    if (manual) st.readLines.clear();   // Read now means read it again, even the same card
+    if (manual) { st.readLines.clear(); st.pageDone = false; }   // Read now means read it again, even the same card
     st.busy = true; this.onBusy(true); st.lastRead = performance.now() / 1000;
     audio.click(); this.setStatus("READING");
     try {
@@ -126,11 +137,14 @@ export class Reader {
       if (!stillCanvas) { this.setStatus("No frame from the camera yet."); return; }
       const best = { c: stillCanvas };
       // the vision model reads far better than on-device OCR; use it when there is a key
-      if (viaModel && this.ai && this.ai.hasKey()) {
+      // the free quota is shared by the whole booth: in auto mode the model reads each page once, then the
+      // device takes over until the page leaves the frame; Read now always asks the model
+      if (viaModel && this.ai && this.ai.hasKey() && (!auto || st.modelArmed)) {
+        st.modelArmed = false;
         try {
           const text = await this.ai.readFrame(best.c);
           if (!st.running) return;
-          if (text) { this.present(text, { source: "model", conf: 95 }); return; }
+          if (text) { st.pageDone = true; this.present(text, { source: "model", conf: 95 }); return; }   // this page is read: auto waits for the next one
         } catch (e) { this.setStatus(`Model unavailable (${e.message}); reading on the device.`); }
       }
       loadWords().catch(() => {});   // the dictionary that keeps invented words out; confidence alone if it fails
@@ -138,7 +152,7 @@ export class Reader {
       const prepared = prepareForOcr(best.c);
       // the print is too small for the engine: say so instead of reading noise
       // (the estimate counts background texture too, so only a clearly tiny reading stops here)
-      if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX * 0.6) { this.say(COACH.small); this.setStatus(COACH.small); return; }
+      if (prepared.xHeight && prepared.xHeight < MIN_XHEIGHT_PX * 0.6) { this.say(coachText("small")); this.setStatus(coachText("small")); return; }
       let worker;
       try { worker = await workerP; } catch (e) { this.setStatus("The reader could not load (" + (e && e.message || e) + "). Check the connection and try again."); return; }
       if (!st.running) return;
@@ -155,7 +169,7 @@ export class Reader {
       await Promise.race([loadWords().catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
       const real = good.filter(w => isKnown(w.text, w.confidence) && /[A-Za-z]{2,}/.test(w.text));
       const medH = median((real.length >= 2 ? real : good).map(w => w.bbox.y1 - w.bbox.y0)) / k;   // word boxes run ascender to descender, about 1.5 x-heights
-      if (medH < MIN_XHEIGHT_PX * 1.2) { this.say(COACH.small); this.setStatus(COACH.small); return; }
+      if (medH < MIN_XHEIGHT_PX * 1.2) { this.say(coachText("small")); this.setStatus(coachText("small")); return; }
       await Promise.race([loadWords().catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
       // only real words, numbers, units and codes are read out; a line that is mostly invented is dropped whole
       const lines = allLines.map(l => cleanLine(l.words || [])).filter(Boolean);
@@ -168,9 +182,11 @@ export class Reader {
   present(text, { source, conf }) {
     const st = this.st;
     const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
-    const fresh = lines.filter(l => !st.readLines.has(norm(l)));
+    // a line counts as read when most of its words match one already read: OCR rarely spells a line the same way twice
+    const seen = (l) => { const a = new Set(norm(l).split(" ")); for (const r of st.readLines) { const b = new Set(r.split(" ")); let k = 0; for (const w of a) if (b.has(w)) k++; if (k / Math.max(a.size, b.size) >= 0.7) return true; } return false; };
+    const fresh = lines.filter(l => !seen(l));
     if (!fresh.length) {
-      this.setStatus(lines.length ? "NOTHING NEW ON THIS PAGE · TAP READ NOW TO HEAR IT AGAIN" : COACH.none);
+      this.setStatus(lines.length ? "NOTHING NEW ON THIS PAGE · TAP READ NOW TO HEAR IT AGAIN" : coachText("none"));
       if (!lines.length) this.coach(); else st.lastRead = performance.now() / 1000 + 12;   // the same card: no click and no OCR every few seconds
       return;
     }
@@ -179,13 +195,13 @@ export class Reader {
     if (!st.sentences.length) { this.coach(); return; }
     const unsure = conf < MIN_CONF;
     this.render(unsure); st.cur = -1; st.paused = false;
-    if (unsure) this.say("Not sure, but it says...", () => this.speakFrom(0)); else this.speakFrom(0);
+    if (unsure) this.say(tr("Not sure, but it says...", AR.unsure), () => this.speakFrom(0)); else this.speakFrom(0);
     this.setStatus(`${st.sentences.length} SENTENCE${st.sentences.length === 1 ? "" : "S"} · ${source === "model" ? "VISION MODEL" : `ON-DEVICE · ${Math.round(conf)} %`}`);
   }
   coach() {
     const m = this.st.metrics; let key = "none";
     if (m.light < 55) key = "dark"; else if (m.sat > 0.08) key = "glare"; else if (m.sharp < 7) key = "blur"; else if (m.text > 0.45) key = "close"; else if (m.text > 0.1) key = "small";
-    this.say(COACH[key]); this.setStatus(COACH[key]);
+    this.say(coachText(key)); this.setStatus(coachText(key));
   }
   speakFrom(i) {
     const st = this.st;
@@ -195,8 +211,8 @@ export class Reader {
   }
   render(unsure = false) {
     const st = this.st;
-    this.out.innerHTML = (unsure ? '<p class="unsure">Not sure, but it says…</p>' : "") +
-      "<p>" + st.sentences.map((s, i) => `<span class="sent ${i === st.cur ? "cur" : i < st.cur ? "done" : ""}">${esc(s)}</span>`).join(" ") + "</p>";
+    this.out.innerHTML = (unsure ? `<p class="unsure" dir="auto">${tr("Not sure, but it says", AR.unsure)}</p>` : "") +
+      '<p dir="auto">' + st.sentences.map((s, i) => `<span class="sent ${i === st.cur ? "cur" : i < st.cur ? "done" : ""}">${esc(s)}</span>`).join(" ") + "</p>";
     const cur = this.out.querySelector(".sent.cur"); if (cur) cur.scrollIntoView({ block: "nearest" });
   }
   stopSpeaking() { const st = this.st; st.paused = true; if (st.cancelSpeak) st.cancelSpeak(); st.speaking = false; }
@@ -214,7 +230,7 @@ export class Reader {
     b.auto.addEventListener("click", () => { st.auto = !st.auto; b.auto.classList.toggle("on", st.auto); b.auto.setAttribute("aria-pressed", st.auto); this.setStatus(st.auto ? "AUTO · READS WHEN THE PICTURE IS STEADY" : "MANUAL · TAP READ NOW"); });
   }
   setZoomLabel(z) { if (!this.zoomLabel) return; this.zoomLabel.textContent = `${z % 1 ? z.toFixed(1) : z}×`; this.zoomLabel.classList.toggle("lossy", z > 2); }
-  start() { const st = this.st; if (st.running) return; st.running = true; st.prevGray = null; st.steadySince = performance.now() / 1000; this.analyse(); }
+  start() { const st = this.st; if (st.running) return; st.running = true; st.modelArmed = true; st.prevGray = null; st.steadySince = performance.now() / 1000; this.analyse(); }
   stop() { const st = this.st; st.running = false; clearTimeout(st.timer); this.stopSpeaking(); if (st.torchAuto) this.torch(false); st.dimSince = 0; this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height); }
 }
 

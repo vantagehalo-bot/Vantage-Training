@@ -57,6 +57,14 @@ export function listVoices() {
   return (en.length ? en : vs);
 }
 export function setVoice(v) { tts.voice = v; }
+/** The device's best Arabic voice: Emirati or Saudi first (Majed and Maged on Apple devices). */
+export function arabicVoice() {
+  const vs = window.speechSynthesis ? speechSynthesis.getVoices().filter(v => /^ar/i.test(v.lang)) : [];
+  const rank = v => (/ar[-_]AE/i.test(v.lang) ? 0 : /ar[-_]SA/i.test(v.lang) ? 1 : /ar[-_]001/i.test(v.lang) ? 2 : 3) - (/premium|enhanced|natural|neural/i.test(v.name) ? 0.5 : 0);
+  return vs.sort((a, b) => rank(a) - rank(b))[0] || null;
+}
+export const hasArabicVoice = () => !!arabicVoice();
+const ARABIC = /[\u0600-\u06FF]/;
 export function setRateWpm(wpm) { tts.wpm = wpm; }
 export function getRateWpm() { return tts.wpm; }
 
@@ -81,7 +89,9 @@ export function speak(text, onEnd) {
   const go = () => {
     if (done) return;
     u = new SpeechSynthesisUtterance(text);
-    if (tts.voice) { u.voice = tts.voice; u.lang = tts.voice.lang || "en-US"; } else u.lang = "en-US";
+    // the voice follows the script: Arabic text gets an Arabic voice whatever the English voice is
+    if (ARABIC.test(text)) { const av = arabicVoice(); if (av) u.voice = av; u.lang = av ? av.lang : "ar-SA"; }
+    else if (tts.voice) { u.voice = tts.voice; u.lang = tts.voice.lang || "en-US"; } else u.lang = "en-US";
     u.rate = Math.max(0.7, Math.min(1.4, tts.wpm / 160));   // engine rate 1 ≈ 160 wpm; iOS maps outside 0.9–1.15 poorly
     u.volume = tts.volume;
     u.onstart = () => { started = true; };

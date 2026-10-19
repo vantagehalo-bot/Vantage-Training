@@ -11,6 +11,9 @@ import * as ai from "./ai.js";
 import { initInside } from "./inside.js";
 import { initHood } from "./hood.js";
 import { Escape } from "./escape.js";
+import { getLang, setLang, isAr, onLang, tr } from "./lang.js";
+import { AR } from "./arabic.js";
+import { qrSvg, takeUrl } from "./qr.js";
 
 const $ = (id) => document.getElementById(id);
 const cfg = defaultConfig();
@@ -74,14 +77,14 @@ function populateVoices() {
   }
   pick.forEach((v, i) => {
     const b = document.createElement("button"); b.textContent = v.name.replace(/Microsoft |Google /, "").split("(")[0].trim();
-    b.addEventListener("click", () => { audio.setVoice(v); box.querySelectorAll("button").forEach(x => x.classList.remove("on")); b.classList.add("on"); speech.say("Vantage ready", Priority.INFO, false, 5); $("stepVoice").classList.add("done"); });
+    b.addEventListener("click", () => { audio.setVoice(v); box.querySelectorAll("button").forEach(x => x.classList.remove("on")); b.classList.add("on"); speech.say(tr("Vantage ready", AR.ready), Priority.INFO, false, 5); $("stepVoice").classList.add("done"); });
     if (i === 0) { b.classList.add("on"); audio.setVoice(v); }
     box.appendChild(b);
   });
 }
 if (window.speechSynthesis) { populateVoices(); speechSynthesis.onvoiceschanged = populateVoices; }
 $("rate").addEventListener("input", e => { const v = +e.target.value; $("rateVal").textContent = v; audio.setRateWpm(v); cfg.speechRate = v; });
-$("goWalk").addEventListener("click", () => { audio.prewarm(); showRoom("walk"); speech.say("Vantage ready", Priority.INFO, false, 5); });
+$("goWalk").addEventListener("click", () => { audio.prewarm(); showRoom("walk"); speech.say(tr("Vantage ready", AR.ready), Priority.INFO, false, 5); });
 $("goLive").addEventListener("click", () => { audio.prewarm(); showRoom("live"); });
 
 // ------------------------------------------------------------------ WALK
@@ -143,17 +146,17 @@ $("guideBtn").addEventListener("click", () => {
   if (world) world.setMode(state.mode);
   setHint(state.mode === "guide" ? "Hold left to follow the route." : "Left thumb walks. Right thumb looks.");
 });
-$("describeBtn").addEventListener("click", () => { setDescribe(!cfg.describe); speech.say(cfg.describe ? "Describe mode on" : "Describe mode off", Priority.INFO, false, 3); });
+$("describeBtn").addEventListener("click", () => { setDescribe(!cfg.describe); speech.say(cfg.describe ? tr("Describe mode on", AR.describeOn) : tr("Describe mode off", AR.describeOff), Priority.INFO, false, 3); });
 $("sceneBtn").addEventListener("click", () => pipeline.speakScene());
 $("muteBtn").addEventListener("click", toggleMute);
-function toggleMute() { const m = speech.toggleMute(); $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").setAttribute("aria-label", m ? "Sound off" : "Sound on"); $("muteBtn").classList.toggle("on", m); if (!m) speech.say("Audio unmuted", Priority.INFO, false, 2); }
+function toggleMute() { const m = speech.toggleMute(); $("muteBtn").setAttribute("aria-pressed", m); $("muteBtn").setAttribute("aria-label", m ? "Sound off" : "Sound on"); $("muteBtn").classList.toggle("on", m); if (!m) speech.say(tr("Audio unmuted", AR.unmuted), Priority.INFO, false, 2); }
 
 // SOS
 $("sosBtn").addEventListener("click", () => {
   $("sos").hidden = false; state.sosSent = true;
   const p = world ? world.getPose() : { x: 0, z: 0 };
   $("sosLine").textContent = `SENT ${new Date().toLocaleTimeString([], { hour12: false })} · 25.2048 N, 55.2708 E`;
-  speech.say("SOS sent. Your location has been shared with your contact.", Priority.CRITICAL, true, 6);
+  speech.say(tr("SOS sent. Your location has been shared with your contact.", AR.sos), Priority.CRITICAL, true, 6);
   setTimeout(() => { $("sosLine").textContent += " · SEEN BY YOUR CONTACT"; }, 3500);
 });
 $("sosClose").addEventListener("click", () => $("sos").hidden = true);
@@ -291,7 +294,7 @@ function startTrust() {
   state._prevMode = prevMode;
   $("blackout").hidden = false; $("replay").hidden = true;
   $("blackoutText").textContent = "Screen off. Find the door at the far end by sound.";
-  speech.say("By ear. Find the door.", Priority.INFO, false, 6);
+  speech.say(tr("By ear. Find the door.", AR.byEar), Priority.INFO, false, 6);
 }
 $("finishTrust").addEventListener("click", () => finishTrust("You stopped here."));
 function finishTrust(reason) {
@@ -364,8 +367,30 @@ $("hoodClose").addEventListener("click", () => showRoom("walk"));
 document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });
 document.addEventListener("dblclick", e => { if (!/^(INPUT|TEXTAREA|BUTTON|A)$/.test(e.target.tagName)) e.preventDefault(); }, { passive: false });
 
+// ------------------------------------------------------------------ language of the voice
+function syncLang() {
+  cfg.lang = getLang();
+  document.querySelectorAll("[data-lang]").forEach(b => { const on = b.dataset.lang === cfg.lang; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+  const note = $("langNote");
+  if (cfg.lang === "ar" && window.speechSynthesis && !audio.hasArabicVoice()) {
+    note.hidden = false;
+    note.textContent = "This device has no Arabic voice yet. iPad and iPhone: Settings, Accessibility, Spoken Content, Voices, Arabic (Majed). Android: Settings, Text-to-speech, install Arabic.";
+  } else note.hidden = true;
+}
+document.querySelectorAll("[data-lang]").forEach(b => b.addEventListener("click", () => {
+  audio.prewarm(); setLang(b.dataset.lang);
+  speech.say(isAr() ? "فانتاج يتحدث الآن بالعربية." : "Vantage will speak English.", Priority.INFO, false, 5);
+}));
+onLang(syncLang); syncLang();
+if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", syncLang);
+
+// ------------------------------------------------------------------ take-home code on the Start screen
+try { $("takeQr").innerHTML = qrSvg(takeUrl(getLang()), { margin: 2 }); onLang(l => { $("takeQr").innerHTML = qrSvg(takeUrl(l), { margin: 2 }); }); } catch (_) {}
+
 // ------------------------------------------------------------------ boot
-showRoom("start");
+// a link can open a room directly: the take-home QR opens ?room=live
+const firstRoom = (() => { try { const r = new URLSearchParams(location.search).get("room"); return rooms.includes(r) ? r : "start"; } catch (_) { return "start"; } })();
+showRoom(firstRoom);
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").catch(() => {});

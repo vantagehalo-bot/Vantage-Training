@@ -2,6 +2,7 @@
 // Nothing here is invented for the demo: spoken wording, thresholds, hysteresis,
 // the IoU tracker, the beam-to-box fusion and the priority speech queue all follow
 // the firmware. If you change a rule, change it in vantage_core.py first.
+import { AR, arLabel, OBSTACLE, joinAr } from "./arabic.js";
 
 export const COCO_LABELS = [
   "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
@@ -39,6 +40,7 @@ export function defaultConfig() {
     visionCloseFrac: 0.55, minTrackHits: 2,
     speechRate: 175, beep: true, criticalRepeatS: 2.5, warningRepeatS: 6.0,
     describe: false, describeCooldownS: 12.0,
+    lang: "en",   // the voice: "en" (the firmware's own phrases) or "ar" (arabic.js)
     scoreThreshold: 0.55, maxDetections: 10,
   };
 }
@@ -312,6 +314,11 @@ export class Announcer {
     this._described = new Map(); this.banner = "";
   }
   phrase(hz) {
+    if (this.cfg.lang === "ar") {
+      const name = hz.target ? arLabel(hz.target.label) : OBSTACLE;
+      if (hz.level === Level.CRITICAL) return AR.critical(name, hz.source === "vision" && hz.distanceCm == null ? null : hz.distanceCm);
+      return AR.caution(name, hz.distanceCm, hz.ttcS != null && hz.ttcS < this.cfg.ttcWarningS);
+    }
     const name = hz.target ? spokenLabel(hz.target.label) : "obstacle";
     const dist = spokenDistance(hz.distanceCm);
     let text;
@@ -344,7 +351,7 @@ export class Announcer {
         this._lastSaid = now;
       }
     } else if (this._lastLevel === Level.CRITICAL && hz.level === Level.CLEAR) {
-      this.speech.say("Clear", Priority.INFO, false, 1.0);
+      this.speech.say(this.cfg.lang === "ar" ? AR.clear : "Clear", Priority.INFO, false, 1.0);
     }
     if (this.cfg.describe && hz.level < Level.CAUTION) {
       for (const trk of tracks) {
@@ -352,7 +359,7 @@ export class Announcer {
         if (trk.hits < Math.max(this.cfg.minTrackHits, 4)) continue;
         this._described.set(trk.label, now);
         const [cx] = trk.center;
-        this.speech.say(`${spokenLabel(trk.label)} ${directionOf(cx, this.cfg.width)}`, Priority.INFO, false, 2.5);
+        this.speech.say(this.cfg.lang === "ar" ? AR.describe(arLabel(trk.label), directionOf(cx, this.cfg.width)) : `${spokenLabel(trk.label)} ${directionOf(cx, this.cfg.width)}`, Priority.INFO, false, 2.5);
         break;
       }
     }
@@ -360,7 +367,12 @@ export class Announcer {
   }
   // The `s` key on the device.
   describeScene(tracks, hz) {
-    if (!tracks.length) { this.speech.say("Nothing detected", Priority.INFO); return; }
+    const ar = this.cfg.lang === "ar";
+    if (!tracks.length) { this.speech.say(ar ? AR.nothing : "Nothing detected", Priority.INFO); return; }
+    if (ar) {
+      const parts = [...tracks].sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3]).slice(0, 4).map(t => AR.describe(arLabel(t.label), directionOf(t.center[0], this.cfg.width)));
+      this.speech.say(joinAr(parts) + (hz.distanceCm != null ? `. ${AR.sceneDistance(hz.distanceCm)}` : ""), Priority.INFO, false, 4.0); return;
+    }
     const parts = [...tracks].sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3]).slice(0, 4)
       .map(t => `${spokenLabel(t.label)} ${directionOf(t.center[0], this.cfg.width)}`);
     let txt = parts.join(", ");

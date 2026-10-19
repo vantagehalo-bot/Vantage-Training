@@ -3,6 +3,8 @@
 // are what find the keys, the dog's food and the money. Walk up to a thing and face it to
 // pick it up or use it. The front door opens when everything is done.
 import { Priority } from "./halo.js";
+import { isAr, tr } from "./lang.js";
+import { arDuration, joinAr } from "./arabic.js";
 
 const REACH = 1.2, FACE_DEG = 32, DWELL_S = 0.35, NAG_S = 5;
 
@@ -18,7 +20,8 @@ export class Escape {
     this.s = { keys: false, food: false, fed: false, wallet: false, note: false, t0: performance.now() / 1000, nagAt: 0, said: new Set() };
     this.ui.card.hidden = true; this.ui.panel.hidden = false;
     this.render();
-    this.say("Leaving for work. Find your keys, feed the dog, and make sure you have a hundred dirhams. Then the front door.", 10);
+    this.say(tr("Leaving for work. Find your keys, feed the dog, and make sure you have a hundred dirhams. Then the front door.",
+      "حان وقت الخروج إلى العمل. المطلوب: العثور على المفاتيح، وإطعام الكلب، والتأكد من وجود مئة درهم في المحفظة، ثم الخروج من الباب الأمامي."), 10);
   }
   stop() { this.active = false; this.ui.panel.hidden = true; this.ui.card.hidden = true; }
 
@@ -52,25 +55,33 @@ export class Escape {
     const s = this.s, now = performance.now() / 1000;
     const nag = (key, text) => { if (now - s.nagAt < NAG_S && s.lastNag === key) return; s.nagAt = now; s.lastNag = key; this.say(text); };
     switch (it.id) {
-      case "keys": it.used = true; it.obj.visible = false; s.keys = true; this.say("Keys. In your pocket."); break;
-      case "food": it.used = true; it.obj.visible = false; s.food = true; this.say(s.fed ? "Dog food." : "Dog food. Now the dog's bowl."); break;
+      case "keys": it.used = true; it.obj.visible = false; s.keys = true; this.say(tr("Keys. In your pocket.", "المفاتيح. صارت في الجيب.")); break;
+      case "food": it.used = true; it.obj.visible = false; s.food = true;
+        this.say(s.fed ? tr("Dog food.", "طعام الكلب.") : tr("Dog food. Now the dog's bowl.", "طعام الكلب. والآن وعاء الكلب.")); break;
       case "wallet": it.used = true; it.obj.visible = false; s.wallet = true;
-        this.say(s.note ? "Wallet. With the note, one hundred dirhams." : "Wallet. The Halo reads fifty dirhams inside. You need a hundred."); break;
+        this.say(s.note ? tr("Wallet. With the note, one hundred dirhams.", "المحفظة. ومع الورقة النقدية صار المبلغ مئة درهم.")
+          : tr("Wallet. The Halo reads fifty dirhams inside. You need a hundred.", "المحفظة. فيها خمسون درهمًا، والمطلوب مئة.")); break;
       case "note": it.used = true; it.obj.visible = false; s.note = true;
-        this.say(s.wallet ? "Fifty dirhams. That makes one hundred." : "A fifty dirham note. Put it with your wallet."); break;
+        this.say(s.wallet ? tr("Fifty dirhams. That makes one hundred.", "ورقة من فئة خمسين درهمًا. صار المجموع مئة درهم.")
+          : tr("A fifty dirham note. Put it with your wallet.", "ورقة من فئة خمسين درهمًا. ما زالت المحفظة مطلوبة.")); break;
       case "bowl":
         if (s.fed) { it.dwell = 0; return; }
-        if (!s.food) { it.dwell = 0; nag("bowl", "The dog's bowl. It's empty. Find the dog food first."); return; }
+        if (!s.food) { it.dwell = 0; nag("bowl", tr("The dog's bowl. It's empty. Find the dog food first.", "وعاء الكلب فارغ. المطلوب أولًا طعام الكلب.")); return; }
         s.fed = true; it.used = true; const k = it.obj.getObjectByName("kibble"); if (k) k.visible = true;
-        this.say("Bowl filled. The dog is eating."); break;
-      case "dog": it.dwell = 0; if (!s.said.has("dog")) { s.said.add("dog"); this.say(s.fed ? "The dog, eating." : "The dog. Hungry. Its bowl is close by."); } return;
+        this.say(tr("Bowl filled. The dog is eating.", "امتلأ الوعاء. الكلب يأكل الآن.")); break;
+      case "dog": it.dwell = 0; if (!s.said.has("dog")) { s.said.add("dog");
+        this.say(s.fed ? tr("The dog, eating.", "الكلب يأكل.") : tr("The dog. Hungry. Its bowl is close by.", "الكلب جائع، ووعاؤه قريب منه.")); } return;
       case "door": {
         it.dwell = 0;
         const missing = [];
-        if (!s.keys) missing.push("your keys");
-        if (!s.fed) missing.push("the dog's breakfast");
-        if (this.money < 100) missing.push(this.money ? "another fifty dirhams" : "your wallet");
-        if (missing.length) { nag("door", `The front door. Not yet: ${missing.length > 1 ? missing.slice(0, -1).join(", ") + " and " + missing[missing.length - 1] : missing[0]}.`); return; }
+        if (!s.keys) missing.push(tr("your keys", "المفاتيح"));
+        if (!s.fed) missing.push(tr("the dog's breakfast", "إطعام الكلب"));
+        if (this.money < 100) missing.push(this.money ? tr("another fifty dirhams", "خمسون درهمًا أخرى") : tr("your wallet", "المحفظة"));
+        if (missing.length) {
+          nag("door", isAr() ? `الباب الأمامي. ليس بعد، ما زال المطلوب: ${joinAr(missing)}.`
+            : `The front door. Not yet: ${missing.length > 1 ? missing.slice(0, -1).join(", ") + " and " + missing[missing.length - 1] : missing[0]}.`);
+          return;
+        }
         this.finish(); return;
       }
     }
@@ -80,7 +91,7 @@ export class Escape {
   finish() {
     this.done = true; const t = this.elapsed, bumps = this.world.bumps.length;
     const mm = Math.floor(t / 60), ss = Math.round(t % 60);
-    this.say(`Door open. Out for work in ${mm ? `${mm} minute${mm > 1 ? "s" : ""} ` : ""}${ss} seconds.`, 10);
+    this.say(isAr() ? `فُتح الباب. انتهت المهمة، والوقت: ${arDuration(t)}.` : `Door open. Out for work in ${mm ? `${mm} minute${mm > 1 ? "s" : ""} ` : ""}${ss} seconds.`, 10);
     this.render();
     this.ui.cardTime.textContent = clock(t);
     this.ui.cardLine.textContent = `${bumps ? `${bumps} bump${bumps === 1 ? "" : "s"} on the way. ` : "Not a single bump. "}Everything was found with the Halo's boxes and voice through a blurred picture.`;

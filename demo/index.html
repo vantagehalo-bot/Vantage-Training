@@ -11,7 +11,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%23ece8e1%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23f0a830%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Mono:wght@200..800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Mono:wght@200..800&family=Noto+Naskh+Arabic:wght@500;600&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -62,6 +62,8 @@
         <li class="step" id="stepVoice">
           <div class="step-body">
             <h3>Voice</h3>
+            <div class="seg lang-seg" role="radiogroup" aria-label="Language of the voice"><button data-lang="en">English</button><button data-lang="ar" lang="ar">العربية</button></div>
+            <p class="fine lang-note" id="langNote" hidden></p>
             <div class="voices" id="voices"></div>
             <label class="field rate"><span>Speech rate</span><output id="rateVal">175</output><span class="unit">wpm</span><input type="range" id="rate" min="120" max="260" value="175"></label>
           </div>
@@ -78,10 +80,17 @@
         </li>
       </ol>
     </div>
-    <figure class="start-figure">
-      <img src="assets/halo-poster.jpg" alt="The Halo visor on a head, rendered">
-      <figcaption>Sensor Visor on the head, Compute Pack on the belt. One cable between them.</figcaption>
-    </figure>
+    <div class="start-side">
+      <figure class="start-figure">
+        <img src="assets/halo-poster.jpg" alt="The Halo visor on a head, rendered">
+        <figcaption>Sensor Visor on the head, Compute Pack on the belt. One cable between them.</figcaption>
+      </figure>
+      <a class="take-card" href="take.html">
+          <div class="take-qr" id="takeQr" aria-hidden="true"></div>
+          <div><b>Take Vantage home</b><span>Scan to try it on your own phone. Tap for a bigger code.</span></div>
+        </a>
+    </div>
+
   </div>
 </section>
 
@@ -308,6 +317,9 @@
   <label class="field"><span>Laser offset from the lens</span><output id="vOffset">0</output><span class="unit">cm</span><input type="range" id="sOffset" min="-8" max="8" value="0"></label>
   <label class="switch-row"><span>Tones before critical alerts</span><input type="checkbox" id="sBeep" checked></label>
   <label class="switch-row"><span>Show the haptic indicator</span><input type="checkbox" id="sHaptic" checked></label>
+  <p class="label">Voice language</p>
+  <div class="seg lang-seg" role="radiogroup" aria-label="Language of the voice"><button data-lang="en">English</button><button data-lang="ar" lang="ar">العربية</button></div>
+  <p class="dim">Alerts, answers and reading in English or Arabic. The screens stay in English.</p>
   <p class="label">Vision model</p>
   <p class="dim">Answers questions and reads print from the camera. Google's Gemini API has a free tier: sign in at <span class="mono">aistudio.google.com</span>, choose <em>Get API key</em>, and paste it here. The key stays on this device.</p>
   <label class="text-field"><span>Gemini API key</span><input type="password" id="sKey" autocomplete="off" placeholder="AIza…"></label>

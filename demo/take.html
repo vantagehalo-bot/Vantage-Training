@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Take Vantage home</title>
+<meta name="theme-color" content="#121110">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%23ece8e1%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%23f0a830%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500&family=Atkinson+Hyperlegible+Next:wght@400;500;600&family=Noto+Naskh+Arabic:wght@500;600&display=swap">
+<style>
+  :root { color-scheme: dark; --bg: #121110; --surface: #1c1a18; --line: #2a2724; --line-strong: #6b655e; --fg: #ece8e1; --muted: #bdb6ac; --dim: #8e8a83; --amber: #f0a830; --amber-ink: #120f0c;
+    --sans: "Atkinson Hyperlegible Next", "Helvetica Neue", Arial, sans-serif; --mono: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, monospace; --arabic: "Noto Naskh Arabic", "Geeza Pro", "Damascus", serif; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  main { max-width: 980px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 40px max(20px, env(safe-area-inset-left)); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--fg); text-decoration: none; }
+  .brand img { height: 14px; }
+  .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--dim); margin: 36px 0 10px; }
+  h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 14px; font-weight: 600; }
+  .lede { font-size: 18px; line-height: 1.5; color: var(--muted); max-width: 46ch; margin: 0; }
+  .codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+  .code { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; justify-items: start; }
+  .code .qr { width: 100%; max-width: 300px; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: #fff; }
+  .code .qr svg { width: 100%; height: 100%; display: block; }
+  .code h2 { margin: 0; font-size: 20px; font-weight: 600; }
+  .code h2[lang=ar] { font-family: var(--arabic); font-size: 24px; line-height: 1.3; }
+  .code p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.45; }
+  .code p[lang=ar] { font-family: var(--arabic); font-size: 16px; line-height: 1.7; }
+  .url { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .what { margin-top: 32px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .what h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .what p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.45; }
+  .fine { margin-top: 24px; color: var(--dim); font-size: 13px; line-height: 1.5; max-width: 70ch; }
+  .actions { display: flex; gap: 8px; margin-top: 24px; flex-wrap: wrap; }
+  .actions a, .actions button { min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; border-radius: 3px; border: 1px solid var(--line-strong); background: transparent; color: var(--fg); font: inherit; font-size: 15px; text-decoration: none; cursor: pointer; }
+  .actions .primary { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); font-weight: 600; }
+  @media (max-width: 640px) { .codes, .what { grid-template-columns: 1fr; } .code .qr { max-width: 240px; } }
+  /* printed for the stall: black on white, both codes large, nothing interactive */
+  @media print {
+    @page { size: A4 portrait; margin: 14mm; }
+    :root { --bg: #fff; --surface: #fff; --fg: #111; --muted: #333; --dim: #555; --line: #bbb; }
+    html, body { background: #fff; color: #111; }
+    .actions, .brand img { display: none; }
+    main { padding: 0; max-width: none; }
+    .code { border: 1px solid #999; break-inside: avoid; }
+    .code .qr { max-width: 75mm; }
+    .what { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <a class="brand" href="./"><img src="assets/logo-mark.png" alt=""><span>Vantage Halo</span></a>
+  <p class="label">Vantage Vision · Dubai</p>
+  <h1>Take Vantage home.</h1>
+  <p class="lede">Scan with your phone's camera. The Halo's eye opens in your browser and works on whatever is around you. Nothing to install.</p>
+
+  <section class="codes">
+    <div class="code">
+      <div class="qr" id="qrEn"></div>
+      <h2>English voice</h2>
+      <p>Point your phone at a room, a street or a label.</p>
+      <span class="url" id="urlEn"></span>
+    </div>
+    <div class="code">
+      <div class="qr" id="qrAr"></div>
+      <h2 lang="ar" dir="rtl">بالصوت العربي</h2>
+      <p lang="ar" dir="rtl">يكفي توجيه الهاتف نحو غرفة أو شارع أو ملصق.</p>
+      <span class="url" id="urlAr"></span>
+    </div>
+  </section>
+
+  <section class="what">
+    <div><h3>Obstacles</h3><p>Names what is ahead and how far, the way the Halo speaks into its headset.</p></div>
+    <div><h3>Ask</h3><p>"What's in front of me?", "How many people are here?", answered from the camera.</p></div>
+    <div><h3>Read</h3><p>Hold a label, a menu or a sign steady and hear it read aloud.</p></div>
+  </section>
+
+  <p class="fine">Use Safari on iPhone or Chrome on Android, and allow the camera when asked. Everything runs on your phone; the picture never leaves it. The Halo itself does this hands-free, from a visor that weighs under 100 g.</p>
+
+  <div class="actions">
+    <button class="primary" onclick="window.print()">Print for the stall</button>
+    <a href="./">Back to the demo</a>
+  </div>
+</main>
+<script type="module">
+  import { qrSvg, takeUrl } from "./js/qr.js";
+  for (const [lang, box, url] of [["en", "qrEn", "urlEn"], ["ar", "qrAr", "urlAr"]]) {
+    const u = takeUrl(lang);
+    document.getElementById(box).innerHTML = qrSvg(u, { label: lang === "ar" ? "رمز فتح فانتاج بالصوت العربي" : "Code to open Vantage on your phone" });
+    document.getElementById(url).textContent = u.replace(/^https:\/\//, "");
+  }
+</script>
+</body>
+</html>
