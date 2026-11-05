@@ -1,0 +1,12 @@
+# Copy to local.properties (which git ignores) and fill in. Never commit the real file.
+sdk.dir=/Users/you/Library/Android/sdk
+
+# Meta Model API (dev.meta.ai). Used by Vantage to describe the frame.
+meta_api_key=
+meta_model_id=muse-spark-1.3
+meta_api_base=https://api.meta.ai/v1
+
+# Device Access Toolkit credentials. Leave empty while testing on the Mock Device Kit or with
+# Developer Mode on in the Meta AI app.
+mwdat_application_id=
+mwdat_client_token=

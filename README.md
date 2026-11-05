@@ -1,3 +1,13 @@
+# Vantage
+
+Two builds of the same idea, a guide in the ear for blind and low-vision people:
+
+- **`vantage-glasses/`**: the Meta Wearables Studio build for Ray-Ban Meta glasses (Android, Device
+  Access Toolkit, runs on the Mock Device Kit). Look / Read / Ask, one tap, one picture, one spoken
+  line. Start with `vantage-glasses/README.md`.
+- **`vantage_core.py` and `vantage_reader.py`**: the Raspberry Pi CM5 headset with the Sony IMX500 AI
+  camera and a TFmini Plus LiDAR, documented below.
+
 # Vantage Core
 
 `vantage_core.py` is the real-time loop for the Vantage assistive wearable. It runs on a
