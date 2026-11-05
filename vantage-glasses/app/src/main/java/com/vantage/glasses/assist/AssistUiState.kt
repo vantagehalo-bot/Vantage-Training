@@ -21,6 +21,8 @@ data class AssistUiState(
     val totalMillis: Long? = null,
     val hasApiKey: Boolean = true,
     val language: AssistLanguage = AssistLanguage.ENGLISH,
+    /** The last shelf scan, for the on-screen list. */
+    val shelf: ShelfScene? = null,
 ) {
   val isBusy: Boolean
     get() = phase != AssistPhase.IDLE && phase != AssistPhase.SPEAKING

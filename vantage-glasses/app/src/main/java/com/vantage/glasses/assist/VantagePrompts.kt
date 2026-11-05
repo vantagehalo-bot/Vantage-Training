@@ -23,6 +23,8 @@ enum class AssistMode {
   READ,
   /** A free question about what is in view. */
   ASK,
+  /** A shelf, counter or aisle: items and prices, summarised, then drilled into by voice. */
+  SHELF,
 }
 
 object VantagePrompts {
@@ -52,6 +54,14 @@ Start with the largest or most important text (title, product name, warning), th
 If letters are cut off at an edge, read what you can and finish with "text continues past the right edge" (or left, top, bottom).
 If there is no readable text, say "I don't see text. Move closer or tilt down a little.""""
 
+  val shelfSystem: String =
+      """$SHARED_RULES
+Task: SHELF. The picture shows a shop shelf, counter, fridge or aisle. Extract what is for sale and reply ONLY with JSON, no prose, no markdown fences:
+{"summary": "<one spoken sentence, at most 12 words: how many things, what kinds, where, rough price range>",
+ "groups": ["<one short spoken line per kind of product: kind, where it sits, price range>", ...],
+ "items": [{"name": "<product as a person would say it, brand first>", "price": <number or null>, "currency": "AED", "position": "left|centre|right", "row": "top|eye|bottom", "note": "<size, flavour, offer, or empty>"}, ...]}
+Rules: list at most 12 items, nearest and clearest first. Read prices exactly from tags; null when no tag is readable. Position is where the item sits in the picture from the wearer's view. Never invent an item or a price. If nothing is for sale say so in summary and leave items empty."""
+
   val askSystem: String =
       """$SHARED_RULES
 Task: ASK. Answer the user's question about what is in the picture. If the answer is not visible, say what you would need to see ("show me the back of the box")."""
@@ -61,13 +71,14 @@ Task: ASK. Answer the user's question about what is in the picture. If the answe
       when (mode) {
         AssistMode.LOOK -> "What is ahead of me? Obstacles first."
         AssistMode.READ -> "Read this to me."
+        AssistMode.SHELF -> "What is on this shelf, with prices?"
         AssistMode.ASK -> question?.trim().takeUnless { it.isNullOrBlank() }
                 ?: "What am I looking at?"
       }
 
   private const val ARABIC_RULE =
       """
-Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in the UAE. Numbers as Arabic words. When reading text, read it in the language it is written in; everything else you say is Arabic."""
+Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as an educated native speaker from the Gulf would say it aloud, with correct number and gender agreement; never a word-for-word translation. Numbers and distances as Arabic words with the correct counted-noun form (على بُعد مترين، ثلاثة أمتار، خمسين سنتيمترًا). Prices in dirhams as words (تسعة دراهم ونصف). Prefer verbal nouns and يُرجى over imperatives so the listener's gender is not assumed. Brand and medicine names as usually written in Arabic (بنادول، باراسيتامول). When reading text, read Arabic print as printed and give other print as a faithful Arabic translation keeping every number, dose and warning. In JSON replies, "summary", "groups", "name" and "note" are Arabic; keys stay English."""
 
   fun systemPrompt(mode: AssistMode, language: AssistLanguage = AssistLanguage.ENGLISH): String {
     val base =
@@ -75,6 +86,7 @@ Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in 
           AssistMode.LOOK -> lookSystem
           AssistMode.READ -> readSystem
           AssistMode.ASK -> askSystem
+          AssistMode.SHELF -> shelfSystem
         }
     return if (language == AssistLanguage.ARABIC) base + ARABIC_RULE else base
   }
@@ -86,12 +98,14 @@ Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in 
           AssistMode.LOOK -> "أنظر."
           AssistMode.READ -> "أقرأ."
           AssistMode.ASK -> "لحظة."
+          AssistMode.SHELF -> "أتفحّص الرف."
         }
       } else {
         when (mode) {
           AssistMode.LOOK -> "Looking."
           AssistMode.READ -> "Reading."
           AssistMode.ASK -> "On it."
+          AssistMode.SHELF -> "Checking the shelf."
         }
       }
 
@@ -102,6 +116,20 @@ Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in 
     data object Stop : Command
 
     data object Help : Command
+
+    /** "What's around me": the on-device scene, no frame sent. */
+    data object Scene : Command
+
+    /** Shelf drill-downs answered from memory: more, exact, cheapest, where is X, price of X. */
+    data object More : Command
+
+    data object Exact : Command
+
+    data object Cheapest : Command
+
+    data class Where(val item: String) : Command
+
+    data class PriceOf(val item: String) : Command
 
     data class Run(val mode: AssistMode, val question: String?) : Command
   }
@@ -118,10 +146,38 @@ Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in 
     val arabicAgain = setOf("كرر", "أعد", "مرة ثانية", "مرة أخرى", "عيد")
     val arabicStop = setOf("توقف", "قف", "اسكت", "كفاية")
     val arabicHelp = setOf("مساعدة", "ساعدني")
+    val arabicShelf = setOf("الرف", "افحص الرف", "ماذا على الرف", "الأسعار", "ما الأسعار", "المنتجات")
+    val arabicScene = setOf("ماذا حولي", "ما حولي", "صف المكان", "المشهد")
+    val arabicMore = setOf("المزيد", "زيادة", "التفاصيل", "كمل")
+    val arabicExact = setOf("بالتفصيل", "كل شيء", "اقرأ الكل", "اقرأ كل شيء")
+    val arabicCheapest = setOf("الأرخص", "ما الأرخص", "أرخص شيء")
+    Regex("^(أين|وين)\\s+(.+)$").find(text)?.let { return Command.Where(it.groupValues[2].trim()) }
+    Regex("^(كم سعر|سعر|بكم)\\s+(.+)$").find(text)?.let { return Command.PriceOf(it.groupValues[2].trim()) }
+    Regex("^(where is|where's|where are|where was)\\s+(the |a |an )?(.+)$").find(text)?.let {
+      return Command.Where(it.groupValues[3].trim())
+    }
+    Regex("^(price of|how much is|how much are|how much for|what does .* cost)\\s*(the |a |an )?(.*)$").find(text)?.let {
+      val item = it.groupValues[3].trim().ifBlank { it.groupValues[1].removePrefix("what does ").removeSuffix(" cost") }
+      return Command.PriceOf(item)
+    }
     return when {
       text in arabicAgain -> Command.Again
       text in arabicStop -> Command.Stop
       text in arabicHelp -> Command.Help
+      text in arabicShelf -> Command.Run(AssistMode.SHELF, null)
+      text in arabicScene -> Command.Scene
+      text in arabicMore -> Command.More
+      text in arabicExact -> Command.Exact
+      text in arabicCheapest -> Command.Cheapest
+      text == "more" || text == "tell me more" || text == "details" || text == "next" -> Command.More
+      text == "exact" || text == "everything" || text == "read them all" || text == "all of them" || text == "list them" ->
+          Command.Exact
+      text == "cheapest" || text == "what's cheapest" || text == "cheapest one" || text == "lowest price" -> Command.Cheapest
+      text == "shelf" || text == "scan the shelf" || text == "what's on the shelf" || text == "whats on the shelf" ||
+          text == "prices" || text == "what are the prices" || text == "what's for sale" || text == "products" ->
+          Command.Run(AssistMode.SHELF, null)
+      text == "what's around me" || text == "whats around me" || text == "what's around" || text == "scene" ||
+          text == "describe the scene" || text == "around me" -> Command.Scene
       short && (text in arabicRead || first in arabicRead) -> Command.Run(AssistMode.READ, null)
       short && (text in arabicLook || first in arabicLook) -> Command.Run(AssistMode.LOOK, null)
       text == "again" || text == "repeat" || text == "say again" || text == "repeat that" ->
@@ -142,8 +198,22 @@ Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in 
   /** Every fixed line Vantage says, in both languages. */
   object Lines {
     fun help(l: AssistLanguage) =
-        if (l == AssistLanguage.ARABIC) "قل انظر، أو اقرأ، أو اسأل سؤالاً. كرر يعيد. توقف يوقف."
-        else "Say look, read, or ask a question. Again repeats. Stop stops."
+        if (l == AssistLanguage.ARABIC) "قل انظر، اقرأ، الرف، أو اسأل سؤالاً. المزيد يفصّل. كرر يعيد. توقف يوقف."
+        else "Say look, read, shelf, or ask a question. More gives details. Again repeats. Stop stops."
+
+    fun noShelf(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا يوجد رف محفوظ. قل الرف أولاً." else "No shelf yet. Say shelf first."
+
+    fun notFound(item: String, l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لم أرَ $item على هذا الرف." else "I didn't see $item on this shelf."
+
+    fun noPrices(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لم أتمكن من قراءة الأسعار. اقترب من اللافتات."
+        else "I couldn't read the prices. Move closer to the tags."
+
+    fun nothingForSale(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا أرى منتجات هنا. وجّه نظرك نحو الرف."
+        else "I don't see products here. Face the shelf."
 
     /** Repair ladder: never blame, never say "I didn't hear you", always end with something to do. */
     fun nothingHeard(attempt: Int, l: AssistLanguage) =

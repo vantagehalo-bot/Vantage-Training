@@ -30,12 +30,21 @@ speech; reading matters most; hazards first) shaped this app.
 
 | Mode | Trigger | Vantage says |
 |---|---|---|
-| **Look** | Look button, "look", "what's ahead" | Nearest hazard, distance, direction, one instruction. Under 20 words. |
-| **Read** | Read button, "read" | The text in view, in reading order. "More below" after ~80 words. |
-| **Ask** | Ask button, then speak | The answer first, under 20 words. |
+| **Awareness** | Always on while the preview runs (Settings) | On-device detector + the firmware's announcer: "Person too close, forty centimetres" with the two-tone beep; "Chair ahead, eighty centimetres". No frame leaves the phone. |
+| **Look** | Tap anywhere, Look button, "look" | Nearest hazard, distance, direction, one instruction. Under 20 words. |
+| **Read** | Double tap, Read button, "read" | The text in view, in reading order. "More below" after ~80 words. |
+| **Shelf** | Swipe up, Shelf button, "shelf", "prices" | The gist ladder: a 12-word gist, then "more" (one line per kind), "exact" (every item and price), "cheapest", "where is the milk", "price of the juice", all from memory. |
+| **Ask** | Press and hold, Ask button, then speak | The answer first, under 20 words. |
+| **Scene** | "what's around me" | The whole scene from the on-device detector. |
 
-Always available: **Again**, **Stop**, **Help**. Earcons for listening, working, done and error.
-Speech doubt is in the first person ("I'm not sure, but..."). People are never identified.
+Always available: **Again** (swipe back), **Stop** (swipe down), **Help**. Earcons: listening, working,
+click on capture, done, error, and the firmware's two-tone alert. The amber glow at the frame edge
+grows as something gets closer; the hazard line reads CLEAR / CAUTION / STOP. Controls fade four
+seconds after the last touch. Speech doubt is in the first person. People are never identified.
+
+Settings (gear): the same sliders as vantage_core.py (critical and warning distance, repeat
+interval, speech rate), awareness, describe mode, beep, gestures, voice language, the Ask question
+chips in English and Arabic, and the speech-queue events (priority, stale drops, sweeps).
 
 ```
  glasses camera ──► DAT stream ──► preview surface ──PixelCopy──► one JPEG (≤768 px)
@@ -76,7 +85,13 @@ glasses**. The camera permission is granted in the Meta AI app. Everything else 
 
 | File | What |
 |---|---|
-| `assist/AssistViewModel.kt` | The turn: earcon → one frame → model → speak → done. Latency budget and repair ladder. |
+| `assist/AssistViewModel.kt` | The turn: earcon → one frame → model → speak → done. Latency budget, repair ladder, shelf ladder, scene memory. |
+| `assist/ShelfTalk.kt` | Gist → More → Exact. Parses the model's JSON once; every follow-up is answered from memory. |
+| `awareness/Announcer.kt` | vantage_core.py's decision logic: tracker, range from box height, hysteresis, repeats, describe mode. |
+| `awareness/MediaPipeDetector.kt` | EfficientDet-Lite0 on the phone, the Lens demo's network. |
+| `voice/Arabic.kt` | The Lens demo's Arabic grammar: counted nouns, distances, prices. |
+| `voice/SpeechQueue.kt` | Priority queue: critical sweeps and interrupts, stale messages are dropped. |
+| `ui/VantageOverlay.kt` | Hazard glow and line, caption card, shelf list, gesture layer, controls, settings sheet. |
 | `assist/VantagePrompts.kt` | System prompts per mode, voice command grammar, repair lines, answer tidying. |
 | `assist/MetaModelClient.kt` | Chat-completions call with the frame as a data URL. No frames or keys in logs. |
 | `assist/SpeechInput.kt` | `SpeechInput` interface + Android recognizer. Swap for DAT Speech here. |

@@ -66,6 +66,8 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
   packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+  // The on-device detector model must stay uncompressed so MediaPipe can memory-map it.
+  androidResources { noCompress += "tflite" }
 }
 
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }
@@ -82,6 +84,8 @@ dependencies {
   implementation(libs.mwdat.core)
   implementation(libs.mwdat.camera)
   implementation(libs.mwdat.mockdevice)
+  // On-device obstacle detector (EfficientDet-Lite0), the same network the Vantage Lens demo runs.
+  implementation(libs.mediapipe.tasks.vision)
   androidTestImplementation(libs.androidx.ui.test.junit4)
   androidTestImplementation(libs.androidx.test.uiautomator)
   androidTestImplementation(libs.androidx.test.rules)

@@ -8,7 +8,13 @@
 
 **What comes out.** One spoken line in the open-ear speakers, in Vantage's format: obstacle, distance, direction, instruction. "Scooter ahead, two metres, on your right. Keep left." For Read: the text, in reading order. For Ask: the answer first, under 20 words. Earcons for listening, working, done and error. "Again", "stop" and "help" always work.
 
-**Three modes.**
+**Awareness (on-device).** While the preview runs, EfficientDet-Lite0 on the phone feeds a port of vantage_core.py's announcer: hysteresis at 50 and 100 cm, two-tone beep before a critical alert, repeat every 2.5 s, describe mode. No frame leaves the phone. It yields to a turn except for critical alerts.
+
+**Shelf mode (the gist ladder).** The model returns structure once (items, prices, positions as JSON); Vantage speaks a 12-word gist, then "more", "exact", "cheapest", "where is X", "price of X" from memory, with no new frame. The model extracts; the app decides how much to say.
+
+**Eyes-free control.** Tap = Look, double tap = Read, hold = Ask, swipe up = Shelf, swipe down = Stop, swipe back = Again. Buttons stay for sighted helpers and fade after four seconds.
+
+**Three cloud modes.**
 
 | Mode | Trigger | Prompt focus | Output |
 |---|---|---|---|

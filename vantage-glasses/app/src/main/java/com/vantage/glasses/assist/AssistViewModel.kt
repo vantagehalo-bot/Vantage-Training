@@ -8,6 +8,9 @@
 //
 // Repair ladder (p25): never more than three errors in a row, no blame, one apology at most, and
 // every failure ends with something the wearer can do.
+//
+// Around the turns runs the awareness engine: the on-device detector and the firmware's announcer,
+// speaking through a priority queue. It yields to a turn, except for critical alerts.
 
 package com.vantage.glasses.assist
 
@@ -20,6 +23,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.vantage.glasses.BuildConfig
+import com.vantage.glasses.awareness.Announcer
+import com.vantage.glasses.awareness.AnnouncerConfig
+import com.vantage.glasses.awareness.AwarenessEngine
+import com.vantage.glasses.awareness.AwarenessState
+import com.vantage.glasses.awareness.Detector
+import com.vantage.glasses.voice.Priority
+import com.vantage.glasses.voice.Settings
+import com.vantage.glasses.voice.SpeechMessage
+import com.vantage.glasses.voice.SpeechQueue
+import com.vantage.glasses.voice.VantageSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,6 +50,8 @@ interface FrameSource {
 class AssistViewModel(
     application: Application,
     private val frameSource: FrameSource,
+    detector: Detector,
+    private val settings: VantageSettings = VantageSettings(application),
     private val speechInput: SpeechInput = AndroidSpeechInput(application),
     private val output: SpokenOutput = SpokenOutput(application),
     private val model: MetaModelClient =
@@ -53,20 +68,86 @@ class AssistViewModel(
     private const val MAX_ERROR_STREAK = 3
   }
 
-  private val _uiState = MutableStateFlow(AssistUiState(hasApiKey = model.hasKey))
+  private val _uiState =
+      MutableStateFlow(AssistUiState(hasApiKey = model.hasKey, language = settings.value.language))
   val uiState: StateFlow<AssistUiState> = _uiState.asStateFlow()
+
+  val settingsState: StateFlow<Settings> = settings.state
+
+  private val queue = SpeechQueue(output, viewModelScope)
+  val nowSpeaking: StateFlow<SpeechMessage?> = queue.nowSpeaking
+  val queueEvents: StateFlow<List<String>> = queue.events
+
+  private val memory = SceneMemory()
+  private val announcer = Announcer()
+  private val awareness =
+      AwarenessEngine(frameSource, detector, announcer, viewModelScope) { queue.enqueue(it) }
+  val awarenessState: StateFlow<AwarenessState> = awareness.state
 
   private var turnJob: Job? = null
   private var errorStreak = 0
   private var apologized = false
+  private var streaming = false
 
   private val language: AssistLanguage
-    get() = _uiState.value.language
+    get() = settings.value.language
+
+  init {
+    queue.start()
+    viewModelScope.launch {
+      settings.state.collect { s ->
+        announcer.config =
+            AnnouncerConfig(
+                criticalCm = s.criticalCm,
+                warningCm = s.warningCm,
+                repeatMs = (s.repeatSec * 1000).toLong(),
+                describeMode = s.describeMode,
+                beepOn = s.beepOn,
+                language = s.language,
+            )
+        output.speechRate = s.speechRate
+        _uiState.update { it.copy(language = s.language) }
+        syncAwareness()
+      }
+    }
+    viewModelScope.launch { output.setLanguage(language.locale) }
+  }
+
+  // MARK: - Stream and awareness
+
+  /** Called by the screen when the glasses stream starts or stops. */
+  fun setStreaming(live: Boolean) {
+    streaming = live
+    if (!live) memory.clear()
+    syncAwareness()
+  }
+
+  private fun syncAwareness() {
+    val wanted = streaming && settings.value.awarenessOn
+    if (wanted && !awareness.isRunning) awareness.start()
+    if (!wanted && awareness.isRunning) awareness.stop()
+  }
+
+  fun toggleAwareness() = settings.update { it.copy(awarenessOn = !it.awarenessOn) }
+
+  fun toggleDescribe() = settings.update { it.copy(describeMode = !it.describeMode) }
+
+  fun setCriticalCm(cm: Int) = settings.update { it.copy(criticalCm = cm.coerceIn(20, 120)) }
+
+  fun setWarningCm(cm: Int) = settings.update { it.copy(warningCm = cm.coerceIn(60, 250)) }
+
+  fun setRepeatSec(sec: Float) = settings.update { it.copy(repeatSec = sec.coerceIn(1f, 6f)) }
+
+  fun setSpeechRate(rate: Float) = settings.update { it.copy(speechRate = rate.coerceIn(0.8f, 2.0f)) }
+
+  fun toggleGestures() = settings.update { it.copy(gesturesOn = !it.gesturesOn) }
+
+  fun toggleBeep() = settings.update { it.copy(beepOn = !it.beepOn) }
 
   /** EN <-> AR. Changes the prompt, the recognizer and the voice; confirms in the new language. */
   fun toggleLanguage() {
     val next = language.next()
-    _uiState.update { it.copy(language = next) }
+    settings.update { it.copy(language = next) }
     startTurn {
       val hasVoice = output.setLanguage(next.locale)
       if (!hasVoice) Log.w(TAG, "no TTS voice for ${next.tag}")
@@ -74,11 +155,16 @@ class AssistViewModel(
     }
   }
 
-  // MARK: - Triggers (the silent path: buttons; the voice path: ask)
+  // MARK: - Triggers (the silent path: buttons and gestures; the voice path: ask)
 
   fun look() = startTurn { runModelTurn(AssistMode.LOOK, null, startedAt = SystemClock.elapsedRealtime()) }
 
   fun read() = startTurn { runModelTurn(AssistMode.READ, null, startedAt = SystemClock.elapsedRealtime()) }
+
+  fun shelf() = startTurn { runModelTurn(AssistMode.SHELF, null, startedAt = SystemClock.elapsedRealtime()) }
+
+  /** The whole scene from the on-device detector. Nothing leaves the phone. */
+  fun scene() = startTurn { speakLine(awareness.sceneLine(), SystemClock.elapsedRealtime(), isError = false) }
 
   /**
    * Voice path. [requestMicPermission] asks for RECORD_AUDIO in context (phone recognizer on the
@@ -101,13 +187,7 @@ class AssistViewModel(
     when (heard) {
       is HeardResult.Heard -> {
         _uiState.update { it.copy(heard = heard.text) }
-        when (val command = VantagePrompts.parseCommand(heard.text)) {
-          VantagePrompts.Command.Again -> repeatLast()
-          VantagePrompts.Command.Stop -> finishIdle()
-          VantagePrompts.Command.Help ->
-              speakLine(VantagePrompts.Lines.help(language), startedAt, isError = false)
-          is VantagePrompts.Command.Run -> runModelTurn(command.mode, command.question, startedAt)
-        }
+        handleCommand(VantagePrompts.parseCommand(heard.text), heard.text, startedAt)
       }
       HeardResult.NothingHeard -> {
         errorStreak++
@@ -120,20 +200,61 @@ class AssistViewModel(
     }
   }
 
+  /** A typed or chip question: same path as voice, without the microphone. */
+  fun askText(text: String) = startTurn {
+    val startedAt = SystemClock.elapsedRealtime()
+    _uiState.update { it.copy(heard = text, lastWasError = false) }
+    handleCommand(VantagePrompts.parseCommand(text), text, startedAt)
+  }
+
+  private suspend fun handleCommand(command: VantagePrompts.Command, raw: String, startedAt: Long) {
+    when (command) {
+      VantagePrompts.Command.Again -> repeatLast()
+      VantagePrompts.Command.Stop -> finishIdle()
+      VantagePrompts.Command.Help -> speakLine(VantagePrompts.Lines.help(language), startedAt, isError = false)
+      VantagePrompts.Command.Scene -> speakLine(awareness.sceneLine(), startedAt, isError = false)
+      VantagePrompts.Command.More -> fromShelf(startedAt) { ShelfTalk.more(it, language) }
+      VantagePrompts.Command.Exact -> fromShelf(startedAt) { ShelfTalk.exact(it, language) }
+      VantagePrompts.Command.Cheapest -> fromShelf(startedAt) { ShelfTalk.cheapest(it, language) }
+      is VantagePrompts.Command.Where -> fromShelf(startedAt) { ShelfTalk.where(it, command.item, language) }
+      is VantagePrompts.Command.PriceOf -> fromShelf(startedAt) { ShelfTalk.priceOf(it, command.item, language) }
+      is VantagePrompts.Command.Run -> runModelTurn(command.mode, command.question ?: raw.takeIf { command.mode == AssistMode.ASK }, startedAt)
+    }
+  }
+
+  /** Shelf drill-downs come from memory. With no shelf in memory, scan one now. */
+  private suspend fun fromShelf(startedAt: Long, line: (ShelfScene) -> String) {
+    val scene = memory.currentShelf
+    if (scene == null) {
+      runModelTurn(AssistMode.SHELF, null, startedAt)
+      return
+    }
+    speakLine(line(scene), startedAt, isError = false, remember = AssistMode.SHELF)
+  }
+
   /** "again": say the last answer once more. Works by voice and by button. */
   fun again() = startTurn { repeatLast() }
 
-  /** "stop": the always-available exit. */
+  /** "stop": the always-available exit. Clears the queue too. */
   fun stop() {
     turnJob?.cancel()
     turnJob = null
     speechInput.cancel()
+    viewModelScope.launch { queue.clear() }
     output.stop()
+    awareness.yieldToAssist = false
     _uiState.update { it.copy(phase = AssistPhase.IDLE) }
   }
 
   fun help() = startTurn {
     speakLine(VantagePrompts.Lines.help(language), SystemClock.elapsedRealtime(), isError = false)
+  }
+
+  /** Speak one shelf item from the on-screen list. */
+  fun speakItem(item: ShelfItem) = startTurn {
+    val p = ShelfTalk.price(item, language)
+    val text = if (p != null) "${item.name}, $p" else item.name
+    speakLine(text, SystemClock.elapsedRealtime(), isError = false)
   }
 
   // MARK: - The turn
@@ -143,6 +264,7 @@ class AssistViewModel(
     turnJob?.cancel()
     speechInput.cancel()
     output.stop()
+    awareness.yieldToAssist = true
     turnJob =
         viewModelScope.launch {
           try {
@@ -152,6 +274,8 @@ class AssistViewModel(
           } catch (e: Exception) {
             Log.e(TAG, "turn failed: ${e.javaClass.simpleName}")
             speakRepair(VantagePrompts.Lines.rejected(language), SystemClock.elapsedRealtime())
+          } finally {
+            awareness.yieldToAssist = false
           }
         }
   }
@@ -171,12 +295,13 @@ class AssistViewModel(
       )
     }
 
-    // 2. Capture: one frame, only now.
+    // 2. Capture: one frame, only now. The click makes the capture audible.
     val frame = frameSource.grabFrame()
     if (frame == null) {
       speakRepair(VantagePrompts.Lines.noFrame(language), startedAt)
       return
     }
+    output.earcon(Earcon.CLICK)
 
     // 3. Understand. Keep the wearer informed if it runs long; never silent over two seconds.
     _uiState.update { it.copy(phase = AssistPhase.THINKING) }
@@ -202,13 +327,31 @@ class AssistViewModel(
     when (result) {
       is ModelResult.Answer -> {
         errorStreak = 0
-        val text = VantagePrompts.tidy(result.text, mode)
         val totalMillis = SystemClock.elapsedRealtime() - startedAt
         Log.i(TAG, "turn ok mode=$mode ack=${ackMillis}ms total=${totalMillis}ms")
-        _uiState.update {
-          it.copy(phase = AssistPhase.SPEAKING, spoken = text, totalMillis = totalMillis)
+        if (mode == AssistMode.SHELF) {
+          val scene = ShelfTalk.parse(result.text)
+          if (scene == null) {
+            // The model answered in prose; say it, tidied, rather than fail.
+            val text = VantagePrompts.tidy(result.text, AssistMode.LOOK)
+            _uiState.update { it.copy(phase = AssistPhase.SPEAKING, spoken = text, totalMillis = totalMillis) }
+            memory.remember(text, mode)
+            output.say(text)
+          } else {
+            memory.rememberShelf(scene)
+            val text = ShelfTalk.gist(scene, language)
+            _uiState.update {
+              it.copy(phase = AssistPhase.SPEAKING, spoken = text, totalMillis = totalMillis, shelf = scene)
+            }
+            memory.remember(text, mode)
+            output.say(text)
+          }
+        } else {
+          val text = VantagePrompts.tidy(result.text, mode)
+          _uiState.update { it.copy(phase = AssistPhase.SPEAKING, spoken = text, totalMillis = totalMillis) }
+          memory.remember(text, mode)
+          output.say(text)
         }
-        output.say(text)
         output.earcon(Earcon.DONE)
         finishIdle()
       }
@@ -229,13 +372,13 @@ class AssistViewModel(
   }
 
   private suspend fun repeatLast() {
-    val last = _uiState.value
-    if (!last.canRepeat) {
+    val last = memory.recent.firstOrNull() ?: _uiState.value.takeIf { it.canRepeat }?.let { SpokenAnswer(it.spoken, it.mode ?: AssistMode.LOOK) }
+    if (last == null) {
       speakLine(VantagePrompts.Lines.nothingToRepeat(language), SystemClock.elapsedRealtime(), isError = false)
       return
     }
-    _uiState.update { it.copy(phase = AssistPhase.SPEAKING) }
-    output.say(last.spoken)
+    _uiState.update { it.copy(phase = AssistPhase.SPEAKING, spoken = last.text, lastWasError = false) }
+    output.say(last.text)
     finishIdle()
   }
 
@@ -255,7 +398,7 @@ class AssistViewModel(
     speakLine(text, startedAt, isError = true)
   }
 
-  private suspend fun speakLine(text: String, startedAt: Long, isError: Boolean) {
+  private suspend fun speakLine(text: String, startedAt: Long, isError: Boolean, remember: AssistMode? = null) {
     _uiState.update {
       it.copy(
           phase = AssistPhase.SPEAKING,
@@ -264,6 +407,7 @@ class AssistViewModel(
           totalMillis = SystemClock.elapsedRealtime() - startedAt,
       )
     }
+    if (remember != null && !isError) memory.remember(text, remember)
     output.say(text)
     finishIdle()
   }
@@ -275,18 +419,21 @@ class AssistViewModel(
   override fun onCleared() {
     super.onCleared()
     turnJob?.cancel()
+    awareness.stop()
     speechInput.release()
     output.release()
+    memory.clear()
   }
 
   class Factory(
       private val application: Application,
       private val frameSource: FrameSource,
+      private val detector: Detector,
   ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
       if (modelClass.isAssignableFrom(AssistViewModel::class.java)) {
         @Suppress("UNCHECKED_CAST")
-        return AssistViewModel(application, frameSource) as T
+        return AssistViewModel(application, frameSource, detector) as T
       }
       throw IllegalArgumentException("Unknown ViewModel class")
     }

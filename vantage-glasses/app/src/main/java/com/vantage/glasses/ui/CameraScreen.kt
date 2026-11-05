@@ -82,8 +82,12 @@ import com.meta.wearable.dat.camera.types.StreamState
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.core.types.RegistrationState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import com.vantage.glasses.R
 import com.vantage.glasses.assist.AssistViewModel
+import com.vantage.glasses.awareness.MediaPipeDetector
+import kotlinx.coroutines.delay
 import com.vantage.glasses.camera.CameraUiState
 import com.vantage.glasses.camera.CameraViewModel
 import com.vantage.glasses.wearables.WearablesViewModel
@@ -112,16 +116,37 @@ fun CameraScreen(
 ) {
   val ui by cameraViewModel.uiState.collectAsStateWithLifecycle()
   val wearablesUi by wearablesViewModel.uiState.collectAsStateWithLifecycle()
-  // Vantage: one frame from this camera, on the wearer's trigger, to the model and into their ear.
+  // Vantage: one frame from this camera, on the wearer's trigger, to the model and into their ear;
+  // and, in between, the on-device detector watching the same stream on the phone.
+  val context = LocalContext.current
+  val detector = remember { MediaPipeDetector(context) }
   val assistViewModel: AssistViewModel =
       viewModel(
           factory =
               AssistViewModel.Factory(
                   application = (LocalActivity.current as ComponentActivity).application,
                   frameSource = cameraViewModel,
+                  detector = detector,
               ),
       )
   val assistUi by assistViewModel.uiState.collectAsStateWithLifecycle()
+  val awareness by assistViewModel.awarenessState.collectAsStateWithLifecycle()
+  val settings by assistViewModel.settingsState.collectAsStateWithLifecycle()
+  val nowSpeaking by assistViewModel.nowSpeaking.collectAsStateWithLifecycle()
+  val queueEvents by assistViewModel.queueEvents.collectAsStateWithLifecycle()
+  var showSettings by remember { mutableStateOf(false) }
+  // Controls fade four seconds after the last touch while the stream is live.
+  var chromeVisible by remember { mutableStateOf(true) }
+  var lastTouch by remember { mutableStateOf(0L) }
+  LaunchedEffect(ui.isStreaming) { assistViewModel.setStreaming(ui.isStreaming) }
+  LaunchedEffect(lastTouch, ui.isStreaming) {
+    chromeVisible = true
+    if (ui.isStreaming) {
+      delay(4_000)
+      chromeVisible = false
+    }
+  }
+  val touched: () -> Unit = { lastTouch = System.currentTimeMillis() }
   val activity = LocalActivity.current
   var showSettingsMenu by remember { mutableStateOf(false) }
 
@@ -134,6 +159,20 @@ fun CameraScreen(
         isUpdateRequired = isUpdateRequired,
         onSurfaceChanged = cameraViewModel::setSurface,
     )
+
+    // Vantage layers over the stream: hazard glow, then the whole-screen gesture control.
+    HazardGlow(level = awareness.level)
+    if (ui.isStreaming) {
+      GestureLayer(
+          enabled = settings.gesturesOn,
+          onTap = { touched(); assistViewModel.look() },
+          onDoubleTap = { touched(); assistViewModel.read() },
+          onLongPress = { touched(); assistViewModel.ask(onRequestRecordAudioPermission) },
+          onSwipeDown = { touched(); assistViewModel.stop() },
+          onSwipeBack = { touched(); assistViewModel.again() },
+          onSwipeUp = { touched(); assistViewModel.shelf() },
+      )
+    }
 
     // Tap outside the open settings menu dismisses it.
     if (showSettingsMenu) {
@@ -149,32 +188,56 @@ fun CameraScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-      TopBar(
-          ui = ui,
-          isDisconnectEnabled = wearablesUi.registrationState == RegistrationState.REGISTERED,
-          showSettingsMenu = showSettingsMenu,
-          onToggleSettings = { showSettingsMenu = !showSettingsMenu },
-          onDisconnect = {
-            activity?.let { wearablesViewModel.startUnregistration(it) }
-            showSettingsMenu = false
-          },
+      Chrome(visible = chromeVisible || !ui.isStreaming) {
+        TopBar(
+            ui = ui,
+            isDisconnectEnabled = wearablesUi.registrationState == RegistrationState.REGISTERED,
+            showSettingsMenu = showSettingsMenu,
+            onToggleSettings = { showSettingsMenu = !showSettingsMenu },
+            onDisconnect = {
+              activity?.let { wearablesViewModel.startUnregistration(it) }
+              showSettingsMenu = false
+            },
+        )
+      }
+      HazardLine(
+          aw = awareness,
+          modifier =
+              if (chromeVisible || !ui.isStreaming) Modifier.padding(start = 20.dp, top = 4.dp)
+              else Modifier.statusBarsPadding().padding(start = 20.dp, top = 8.dp),
       )
 
       Spacer(modifier = Modifier.weight(1f))
 
       if (ui.hasSession && !isUpdateRequired) {
-        AssistPanel(
-            ui = assistUi,
-            isPreviewLive = ui.isStreaming,
-            onLook = assistViewModel::look,
-            onRead = assistViewModel::read,
-            onAsk = { assistViewModel.ask(onRequestRecordAudioPermission) },
-            onAgain = assistViewModel::again,
-            onStop = assistViewModel::stop,
-            onToggleLanguage = assistViewModel::toggleLanguage,
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          assistUi.shelf?.let { scene ->
+            Chrome(visible = chromeVisible) {
+              ShelfList(items = scene.items, language = assistUi.language, onItem = { touched(); assistViewModel.speakItem(it) })
+            }
+          }
+          CaptionCard(ui = assistUi, nowSpeaking = nowSpeaking?.text, isPreviewLive = ui.isStreaming)
+          Chrome(visible = chromeVisible || !ui.isStreaming) {
+            VantageControls(
+                ui = assistUi,
+                isPreviewLive = ui.isStreaming,
+                onLook = { touched(); assistViewModel.look() },
+                onRead = { touched(); assistViewModel.read() },
+                onShelf = { touched(); assistViewModel.shelf() },
+                onAsk = { touched(); assistViewModel.ask(onRequestRecordAudioPermission) },
+                onAgain = { touched(); assistViewModel.again() },
+                onStop = { touched(); assistViewModel.stop() },
+                onToggleLanguage = { touched(); assistViewModel.toggleLanguage() },
+                onSettings = { touched(); showSettings = true },
+            )
+          }
+        }
       }
 
+      Chrome(visible = chromeVisible || !ui.isStreaming) {
       BottomBar(
           ui = ui,
           isUpdateRequired = isUpdateRequired,
@@ -187,6 +250,28 @@ fun CameraScreen(
           onToggleRecording = { cameraViewModel.toggleRecording(onRequestRecordAudioPermission) },
           onToggleMic = cameraViewModel::toggleMic,
           onUpdateFirmware = { activity?.let { wearablesViewModel.openFirmwareUpdate(it) } },
+      )
+      }
+    }
+
+    if (showSettings) {
+      SettingsSheet(
+          settings = settings,
+          queueEvents = queueEvents,
+          onDismiss = { showSettings = false },
+          onCritical = assistViewModel::setCriticalCm,
+          onWarning = assistViewModel::setWarningCm,
+          onRepeat = assistViewModel::setRepeatSec,
+          onRate = assistViewModel::setSpeechRate,
+          onToggleAwareness = assistViewModel::toggleAwareness,
+          onToggleDescribe = assistViewModel::toggleDescribe,
+          onToggleBeep = assistViewModel::toggleBeep,
+          onToggleGestures = assistViewModel::toggleGestures,
+          onToggleLanguage = assistViewModel::toggleLanguage,
+          onChip = { chip ->
+            showSettings = false
+            assistViewModel.askText(chip)
+          },
       )
     }
 

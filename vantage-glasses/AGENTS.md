@@ -3,7 +3,8 @@
 Read docs/SPEC.md first; it is the product in one page. Then the Meta DAT plugin skills (mwdat-android).
 
 - The app is Meta's CameraAccess sample plus one layer: `app/src/main/java/com/vantage/glasses/assist/`. Keep the SDK lifecycle code as Meta wrote it.
-- One trigger, one frame, one answer. Never stream frames to the model and never grab a frame without a tap or a spoken request.
+- One trigger, one frame, one answer to the cloud model. Never stream frames to the model. Continuous awareness runs on the phone only (`awareness/`), with the firmware's announcer rules; it yields to a turn except for critical alerts.
+- Shelf answers climb the ladder Gist → More → Exact (`assist/ShelfTalk.kt`); follow-ups come from `SceneMemory`, never a new frame.
 - Spoken answers: answer first, under 20 words, obstacle then distance then direction then instruction. Numbers as words. Doubt in the first person. Edit prompts in `VantagePrompts.kt`, not in the view model.
 - Acknowledge within 0.5 s (earcon), answer in about 3 s, never silent over 2 s. Every failure ends with something the wearer can do; at most three errors in a row; one apology.
 - Never identify people. No face, voice or identity features, ever.

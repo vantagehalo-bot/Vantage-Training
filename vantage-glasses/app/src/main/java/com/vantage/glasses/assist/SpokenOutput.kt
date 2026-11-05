@@ -7,8 +7,7 @@
 package com.vantage.glasses.assist
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import com.vantage.glasses.voice.Earcons
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -24,6 +23,10 @@ enum class Earcon {
   WORKING,
   DONE,
   ERROR,
+  /** The firmware's two-tone beep before a critical alert. */
+  ALERT,
+  /** The reader's shutter click when a frame is taken. */
+  CLICK,
 }
 
 class SpokenOutput(context: Context) {
@@ -38,8 +41,7 @@ class SpokenOutput(context: Context) {
         if (ok) applyDefaults()
         ready.complete(ok)
       }
-  private val tones: ToneGenerator? =
-      runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 85) }.getOrNull()
+  private val earcons = Earcons()
   private val utteranceCounter = AtomicInteger()
 
   // Speech speed is a user setting; blind users often want faster speech. 1.0 is the default.
@@ -77,14 +79,16 @@ class SpokenOutput(context: Context) {
   }
 
   fun earcon(kind: Earcon) {
-    val tone =
+    val name =
         when (kind) {
-          Earcon.LISTENING -> ToneGenerator.TONE_PROP_BEEP
-          Earcon.WORKING -> ToneGenerator.TONE_PROP_ACK
-          Earcon.DONE -> ToneGenerator.TONE_PROP_BEEP2
-          Earcon.ERROR -> ToneGenerator.TONE_PROP_NACK
+          Earcon.LISTENING -> "listening"
+          Earcon.WORKING -> "working"
+          Earcon.DONE -> "done"
+          Earcon.ERROR -> "error"
+          Earcon.ALERT -> "alert"
+          Earcon.CLICK -> "click"
         }
-    tones?.startTone(tone, 120)
+    runCatching { earcons.play(name) }.onFailure { Log.w(TAG, "earcon failed: ${it.javaClass.simpleName}") }
   }
 
   /** Speaks [text], interrupting anything already playing, and returns once it has been spoken. */
@@ -133,6 +137,5 @@ class SpokenOutput(context: Context) {
   fun release() {
     engine.stop()
     engine.shutdown()
-    tones?.release()
   }
 }
