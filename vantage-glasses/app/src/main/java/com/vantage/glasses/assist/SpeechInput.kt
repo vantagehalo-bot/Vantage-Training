@@ -44,11 +44,11 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
   private var recognizer: SpeechRecognizer? = null
 
   override suspend fun listenOnce(onPartial: (String) -> Unit): HeardResult =
-      withContext(Dispatchers.Main) {
+      withContext<HeardResult>(Dispatchers.Main) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
           return@withContext HeardResult.Unavailable("no recognition service")
         }
-        suspendCancellableCoroutine { continuation ->
+        suspendCancellableCoroutine<HeardResult> { continuation ->
           val engine = SpeechRecognizer.createSpeechRecognizer(context)
           recognizer = engine
           var finished = false
