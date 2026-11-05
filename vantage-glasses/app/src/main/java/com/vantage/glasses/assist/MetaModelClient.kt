@@ -51,7 +51,9 @@ class MetaModelClient(
     // to keep the round trip near the 3 s budget on a phone connection.
     private const val MAX_EDGE_PX = 768
     private const val JPEG_QUALITY = 70
-    private const val MAX_TOKENS = 160
+    // Muse Spark is a reasoning model: hidden reasoning counts against this limit, so it must be
+    // far above the ~40 spoken tokens we want or the visible answer comes back empty.
+    private const val MAX_TOKENS = 2048
   }
 
   val hasKey: Boolean
@@ -89,6 +91,8 @@ class MetaModelClient(
           val text = connection.inputStream.bufferedReader().use { it.readText() }
           val answer = parseAnswer(text)
           if (answer.isNullOrBlank()) {
+            // Shape only, never the content: enough to see why nothing came back.
+            Log.w(TAG, "Empty answer; response shape: ${describeShape(text)}")
             ModelResult.Failure(ModelResult.Failure.Kind.EMPTY, "empty answer")
           } else {
             ModelResult.Answer(answer.trim())
@@ -152,27 +156,70 @@ class MetaModelClient(
   private fun parseAnswer(json: String): String? {
     return try {
       val root = JSONObject(json)
-      val choices = root.optJSONArray("choices") ?: return null
-      if (choices.length() == 0) return null
-      val message = choices.getJSONObject(0).optJSONObject("message") ?: return null
-      when (val content = message.opt("content")) {
-        is String -> content
-        is JSONArray -> {
-          // Some OpenAI-compatible servers return content as a list of parts.
-          buildString {
-            for (i in 0 until content.length()) {
-              val part = content.optJSONObject(i) ?: continue
-              if (part.optString("type") == "text") append(part.optString("text"))
-            }
+      // Chat-completions shape.
+      root.optJSONArray("choices")?.let { choices ->
+        if (choices.length() > 0) {
+          val choice = choices.getJSONObject(0)
+          val message = choice.optJSONObject("message")
+          val fromContent = message?.let { textOf(it.opt("content")) }
+          if (!fromContent.isNullOrBlank()) return fromContent
+          // Some servers put a streamed/alternate text here.
+          val fromText = textOf(choice.opt("text"))
+          if (!fromText.isNullOrBlank()) return fromText
+        }
+      }
+      // Responses-API shape (output_text, or output[].content[].text).
+      val outputText = root.optString("output_text", "")
+      if (outputText.isNotBlank()) return outputText
+      root.optJSONArray("output")?.let { output ->
+        val sb = StringBuilder()
+        for (i in 0 until output.length()) {
+          val item = output.optJSONObject(i) ?: continue
+          val content = item.optJSONArray("content") ?: continue
+          for (j in 0 until content.length()) {
+            val part = content.optJSONObject(j) ?: continue
+            val type = part.optString("type")
+            if (type == "output_text" || type == "text") sb.append(part.optString("text"))
           }
         }
-        else -> null
+        if (sb.isNotBlank()) return sb.toString()
       }
+      null
     } catch (e: Exception) {
       Log.w(TAG, "Could not parse model response: ${e.javaClass.simpleName}")
       null
     }
   }
+
+  /** Text from a content field that may be a string or a list of typed parts. */
+  private fun textOf(content: Any?): String? =
+      when (content) {
+        is String -> content
+        is JSONArray ->
+            buildString {
+              for (i in 0 until content.length()) {
+                val part = content.optJSONObject(i) ?: continue
+                val type = part.optString("type")
+                if (type == "text" || type == "output_text") append(part.optString("text"))
+              }
+            }
+        else -> null
+      }
+
+  /** Top-level keys, finish reason and content length only; no answer text or frame. */
+  private fun describeShape(json: String): String =
+      try {
+        val root = JSONObject(json)
+        val keys = root.keys().asSequence().joinToString(",")
+        val choice = root.optJSONArray("choices")?.optJSONObject(0)
+        val finish = choice?.optString("finish_reason") ?: "-"
+        val message = choice?.optJSONObject("message")
+        val messageKeys = message?.keys()?.asSequence()?.joinToString(",") ?: "-"
+        val contentLen = message?.optString("content", "")?.length ?: -1
+        "keys=[$keys] finish=$finish messageKeys=[$messageKeys] contentLen=$contentLen"
+      } catch (e: Exception) {
+        "unparseable (${json.length} chars)"
+      }
 
   private fun summarizeError(body: String): String =
       try {
