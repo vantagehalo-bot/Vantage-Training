@@ -60,6 +60,15 @@ with USB debugging on, and a Meta Model API key from [dev.meta.ai](https://dev.m
 4. Tap **Start session**, then **Preview**. The phone camera now stands in for the glasses.
 5. Tap **Look**. Allow the microphone the first time you tap **Ask**.
 
+**Arabic.** Tap the **EN / AR** chip in the answer card. Replies, the recognizer and the voice all
+switch; the fixed lines (help, repair ladder) are translated. The phone needs an Arabic
+text-to-speech voice: Settings → General management → Text-to-speech → Google → Install voice
+data → Arabic.
+
+**Other models.** The client is OpenAI-compatible, so Gemini or OpenAI can stand in while Meta
+billing is pending: see the commented lines in `local.properties.example`. Keep Muse Spark for
+the Studio demo.
+
 On real glasses: turn on Developer Mode in the Meta AI app, skip step 3, and tap **Connect my
 glasses**. The camera permission is granted in the Meta AI app. Everything else is the same.
 

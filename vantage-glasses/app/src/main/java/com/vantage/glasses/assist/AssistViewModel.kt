@@ -60,6 +60,20 @@ class AssistViewModel(
   private var errorStreak = 0
   private var apologized = false
 
+  private val language: AssistLanguage
+    get() = _uiState.value.language
+
+  /** EN <-> AR. Changes the prompt, the recognizer and the voice; confirms in the new language. */
+  fun toggleLanguage() {
+    val next = language.next()
+    _uiState.update { it.copy(language = next) }
+    startTurn {
+      val hasVoice = output.setLanguage(next.locale)
+      if (!hasVoice) Log.w(TAG, "no TTS voice for ${next.tag}")
+      speakLine(VantagePrompts.Lines.languageSwitched(next), SystemClock.elapsedRealtime(), isError = false)
+    }
+  }
+
   // MARK: - Triggers (the silent path: buttons; the voice path: ask)
 
   fun look() = startTurn { runModelTurn(AssistMode.LOOK, null, startedAt = SystemClock.elapsedRealtime()) }
@@ -77,27 +91,31 @@ class AssistViewModel(
       it.copy(phase = AssistPhase.LISTENING, mode = AssistMode.ASK, heard = "", lastWasError = false)
     }
     if (!requestMicPermission()) {
-      speakRepair("Microphone is off. Use the Look or Read button.", startedAt)
+      speakRepair(VantagePrompts.Lines.micOff(language), startedAt)
       return@startTurn
     }
-    val heard = speechInput.listenOnce { partial -> _uiState.update { it.copy(heard = partial) } }
+    val heard =
+        speechInput.listenOnce(language.tag) { partial ->
+          _uiState.update { it.copy(heard = partial) }
+        }
     when (heard) {
       is HeardResult.Heard -> {
         _uiState.update { it.copy(heard = heard.text) }
         when (val command = VantagePrompts.parseCommand(heard.text)) {
           VantagePrompts.Command.Again -> repeatLast()
           VantagePrompts.Command.Stop -> finishIdle()
-          VantagePrompts.Command.Help -> speakLine(VantagePrompts.HELP_LINE, startedAt, isError = false)
+          VantagePrompts.Command.Help ->
+              speakLine(VantagePrompts.Lines.help(language), startedAt, isError = false)
           is VantagePrompts.Command.Run -> runModelTurn(command.mode, command.question, startedAt)
         }
       }
       HeardResult.NothingHeard -> {
         errorStreak++
-        speakRepair(VantagePrompts.nothingHeardLine(errorStreak), startedAt)
+        speakRepair(VantagePrompts.Lines.nothingHeard(errorStreak, language), startedAt)
       }
       is HeardResult.Unavailable -> {
         Log.w(TAG, "speech unavailable: ${heard.reason}")
-        speakRepair("Voice isn't available here. Use the Look or Read button.", startedAt)
+        speakRepair(VantagePrompts.Lines.voiceUnavailable(language), startedAt)
       }
     }
   }
@@ -114,7 +132,9 @@ class AssistViewModel(
     _uiState.update { it.copy(phase = AssistPhase.IDLE) }
   }
 
-  fun help() = startTurn { speakLine(VantagePrompts.HELP_LINE, SystemClock.elapsedRealtime(), isError = false) }
+  fun help() = startTurn {
+    speakLine(VantagePrompts.Lines.help(language), SystemClock.elapsedRealtime(), isError = false)
+  }
 
   // MARK: - The turn
 
@@ -131,7 +151,7 @@ class AssistViewModel(
             throw e
           } catch (e: Exception) {
             Log.e(TAG, "turn failed: ${e.javaClass.simpleName}")
-            speakRepair(VantagePrompts.rejectedLine(), SystemClock.elapsedRealtime())
+            speakRepair(VantagePrompts.Lines.rejected(language), SystemClock.elapsedRealtime())
           }
         }
   }
@@ -154,7 +174,7 @@ class AssistViewModel(
     // 2. Capture: one frame, only now.
     val frame = frameSource.grabFrame()
     if (frame == null) {
-      speakRepair(VantagePrompts.noFrameLine(), startedAt)
+      speakRepair(VantagePrompts.Lines.noFrame(language), startedAt)
       return
     }
 
@@ -163,13 +183,13 @@ class AssistViewModel(
     val workingLine =
         viewModelScope.launch {
           delay(WORKING_LINE_AFTER_MS)
-          output.say(VantagePrompts.workingLine(mode))
+          output.say(VantagePrompts.workingLine(mode, language))
         }
     val result =
         try {
           model.ask(
               frame = frame,
-              systemPrompt = VantagePrompts.systemPrompt(mode),
+              systemPrompt = VantagePrompts.systemPrompt(mode, language),
               question = VantagePrompts.userText(mode, question),
           )
         } finally {
@@ -196,11 +216,11 @@ class AssistViewModel(
         Log.w(TAG, "turn failed mode=$mode kind=${result.kind} ${result.detail}")
         val line =
             when (result.kind) {
-              ModelResult.Failure.Kind.NO_KEY -> VantagePrompts.noKeyLine()
-              ModelResult.Failure.Kind.OFFLINE -> VantagePrompts.offlineLine()
-              ModelResult.Failure.Kind.TIMEOUT -> VantagePrompts.timeoutLine()
+              ModelResult.Failure.Kind.NO_KEY -> VantagePrompts.Lines.noKey(language)
+              ModelResult.Failure.Kind.OFFLINE -> VantagePrompts.Lines.offline(language)
+              ModelResult.Failure.Kind.TIMEOUT -> VantagePrompts.Lines.timeout(language)
               ModelResult.Failure.Kind.REJECTED,
-              ModelResult.Failure.Kind.EMPTY -> VantagePrompts.rejectedLine()
+              ModelResult.Failure.Kind.EMPTY -> VantagePrompts.Lines.rejected(language)
             }
         errorStreak++
         speakRepair(line, startedAt)
@@ -211,7 +231,7 @@ class AssistViewModel(
   private suspend fun repeatLast() {
     val last = _uiState.value
     if (!last.canRepeat) {
-      speakLine("Nothing to repeat yet. Tap Look or Read.", SystemClock.elapsedRealtime(), isError = false)
+      speakLine(VantagePrompts.Lines.nothingToRepeat(language), SystemClock.elapsedRealtime(), isError = false)
       return
     }
     _uiState.update { it.copy(phase = AssistPhase.SPEAKING) }
@@ -225,10 +245,10 @@ class AssistViewModel(
     // line, and the buttons keep working. Hand off instead of looping.
     val text =
         when {
-          errorStreak >= MAX_ERROR_STREAK -> "Let's use the phone buttons for now."
+          errorStreak >= MAX_ERROR_STREAK -> VantagePrompts.Lines.handOff(language)
           !apologized && errorStreak >= 2 -> {
             apologized = true
-            "Sorry. $line"
+            VantagePrompts.Lines.sorry(language) + line
           }
           else -> line
         }

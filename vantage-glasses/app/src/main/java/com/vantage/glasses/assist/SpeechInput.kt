@@ -28,7 +28,7 @@ sealed interface HeardResult {
 
 interface SpeechInput {
   /** Listens for one utterance and returns when the recognizer finishes or gives up. */
-  suspend fun listenOnce(onPartial: (String) -> Unit = {}): HeardResult
+  suspend fun listenOnce(languageTag: String = "en-US", onPartial: (String) -> Unit = {}): HeardResult
 
   fun cancel()
 
@@ -43,7 +43,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
   private var recognizer: SpeechRecognizer? = null
 
-  override suspend fun listenOnce(onPartial: (String) -> Unit): HeardResult =
+  override suspend fun listenOnce(languageTag: String, onPartial: (String) -> Unit): HeardResult =
       withContext<HeardResult>(Dispatchers.Main) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
           return@withContext HeardResult.Unavailable("no recognition service")
@@ -107,6 +107,7 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                     RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
                 )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)

@@ -171,6 +171,7 @@ fun CameraScreen(
             onAsk = { assistViewModel.ask(onRequestRecordAudioPermission) },
             onAgain = assistViewModel::again,
             onStop = assistViewModel::stop,
+            onToggleLanguage = assistViewModel::toggleLanguage,
         )
       }
 

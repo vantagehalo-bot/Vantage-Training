@@ -20,6 +20,7 @@ data class AssistUiState(
     val ackMillis: Long? = null,
     val totalMillis: Long? = null,
     val hasApiKey: Boolean = true,
+    val language: AssistLanguage = AssistLanguage.ENGLISH,
 ) {
   val isBusy: Boolean
     get() = phase != AssistPhase.IDLE && phase != AssistPhase.SPEAKING

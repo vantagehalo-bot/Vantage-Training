@@ -8,6 +8,14 @@ package com.vantage.glasses.assist
 
 import java.util.Locale
 
+/** The language Vantage listens and speaks in. Replies never flip to English unasked. */
+enum class AssistLanguage(val tag: String, val locale: Locale, val label: String) {
+  ENGLISH("en-US", Locale.US, "EN"),
+  ARABIC("ar-AE", Locale("ar", "AE"), "AR");
+
+  fun next(): AssistLanguage = if (this == ENGLISH) ARABIC else ENGLISH
+}
+
 enum class AssistMode {
   /** Scene and obstacles for safe movement. */
   LOOK,
@@ -57,19 +65,34 @@ Task: ASK. Answer the user's question about what is in the picture. If the answe
                 ?: "What am I looking at?"
       }
 
-  fun systemPrompt(mode: AssistMode): String =
-      when (mode) {
-        AssistMode.LOOK -> lookSystem
-        AssistMode.READ -> readSystem
-        AssistMode.ASK -> askSystem
-      }
+  private const val ARABIC_RULE =
+      """
+Language: reply ONLY in Arabic, simple spoken Modern Standard Arabic as used in the UAE. Numbers as Arabic words. When reading text, read it in the language it is written in; everything else you say is Arabic."""
+
+  fun systemPrompt(mode: AssistMode, language: AssistLanguage = AssistLanguage.ENGLISH): String {
+    val base =
+        when (mode) {
+          AssistMode.LOOK -> lookSystem
+          AssistMode.READ -> readSystem
+          AssistMode.ASK -> askSystem
+        }
+    return if (language == AssistLanguage.ARABIC) base + ARABIC_RULE else base
+  }
 
   /** Spoken while the model works, if it takes longer than the acknowledge budget. */
-  fun workingLine(mode: AssistMode): String =
-      when (mode) {
-        AssistMode.LOOK -> "Looking."
-        AssistMode.READ -> "Reading."
-        AssistMode.ASK -> "On it."
+  fun workingLine(mode: AssistMode, language: AssistLanguage = AssistLanguage.ENGLISH): String =
+      if (language == AssistLanguage.ARABIC) {
+        when (mode) {
+          AssistMode.LOOK -> "أنظر."
+          AssistMode.READ -> "أقرأ."
+          AssistMode.ASK -> "لحظة."
+        }
+      } else {
+        when (mode) {
+          AssistMode.LOOK -> "Looking."
+          AssistMode.READ -> "Reading."
+          AssistMode.ASK -> "On it."
+        }
       }
 
   // Voice commands: verb-first, three words or fewer. "again", "stop" and "help" always work.
@@ -84,12 +107,23 @@ Task: ASK. Answer the user's question about what is in the picture. If the answe
   }
 
   fun parseCommand(spoken: String): Command {
-    val text = spoken.trim().lowercase(Locale.ROOT).trimEnd('.', '?', '!')
+    val text = spoken.trim().lowercase(Locale.ROOT).trimEnd('.', '?', '!', '؟')
     val words = text.split(Regex("\\s+")).filter { it.isNotBlank() }
     if (words.isEmpty()) return Command.Run(AssistMode.LOOK, null)
     val first = words.first()
     val short = words.size <= 3
+    // Arabic commands, verb first: look / read / again / stop / help.
+    val arabicLook = setOf("انظر", "أنظر", "شوف", "شو قدامي", "ماذا أمامي", "ما أمامي")
+    val arabicRead = setOf("اقرأ", "إقرأ", "اقرا", "اقرأ هذا")
+    val arabicAgain = setOf("كرر", "أعد", "مرة ثانية", "مرة أخرى", "عيد")
+    val arabicStop = setOf("توقف", "قف", "اسكت", "كفاية")
+    val arabicHelp = setOf("مساعدة", "ساعدني")
     return when {
+      text in arabicAgain -> Command.Again
+      text in arabicStop -> Command.Stop
+      text in arabicHelp -> Command.Help
+      short && (text in arabicRead || first in arabicRead) -> Command.Run(AssistMode.READ, null)
+      short && (text in arabicLook || first in arabicLook) -> Command.Run(AssistMode.LOOK, null)
       text == "again" || text == "repeat" || text == "say again" || text == "repeat that" ->
           Command.Again
       text == "stop" || text == "quiet" || text == "cancel" -> Command.Stop
@@ -105,22 +139,62 @@ Task: ASK. Answer the user's question about what is in the picture. If the answe
     }
   }
 
-  const val HELP_LINE = "Say look, read, or ask a question. Again repeats. Stop stops."
+  /** Every fixed line Vantage says, in both languages. */
+  object Lines {
+    fun help(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "قل انظر، أو اقرأ، أو اسأل سؤالاً. كرر يعيد. توقف يوقف."
+        else "Say look, read, or ask a question. Again repeats. Stop stops."
 
-  /** Repair ladder: never blame, never say "I didn't hear you", always end with something to do. */
-  fun nothingHeardLine(attempt: Int): String =
-      if (attempt <= 1) "Say look, read, or a question. Or use the buttons."
-      else "Use the Look or Read button on the phone."
+    /** Repair ladder: never blame, never say "I didn't hear you", always end with something to do. */
+    fun nothingHeard(attempt: Int, l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) {
+          if (attempt <= 1) "قل انظر، أو اقرأ، أو سؤالاً. أو استخدم الأزرار."
+          else "استخدم زر انظر أو اقرأ على الهاتف."
+        } else {
+          if (attempt <= 1) "Say look, read, or a question. Or use the buttons."
+          else "Use the Look or Read button on the phone."
+        }
 
-  fun offlineLine(): String = "No connection right now. Try again in a moment."
+    fun offline(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا يوجد اتصال الآن. حاول بعد لحظة."
+        else "No connection right now. Try again in a moment."
 
-  fun timeoutLine(): String = "That took too long. Ask again?"
+    fun timeout(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "استغرق هذا وقتاً طويلاً. اسأل مرة أخرى؟"
+        else "That took too long. Ask again?"
 
-  fun rejectedLine(): String = "I can't reach my eyes right now. Try again."
+    fun rejected(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا أستطيع الرؤية الآن. حاول مرة أخرى."
+        else "I can't reach my eyes right now. Try again."
 
-  fun noKeyLine(): String = "Vantage isn't set up yet. Add the API key on the phone."
+    fun noKey(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "فانتج غير جاهز بعد. أضف مفتاح الخدمة على الهاتف."
+        else "Vantage isn't set up yet. Add the API key on the phone."
 
-  fun noFrameLine(): String = "I don't have a picture yet. Start the preview and try again."
+    fun noFrame(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا توجد صورة بعد. شغّل المعاينة وحاول مرة أخرى."
+        else "I don't have a picture yet. Start the preview and try again."
+
+    fun micOff(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "الميكروفون مغلق. استخدم زر انظر أو اقرأ."
+        else "Microphone is off. Use the Look or Read button."
+
+    fun voiceUnavailable(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "الصوت غير متاح هنا. استخدم زر انظر أو اقرأ."
+        else "Voice isn't available here. Use the Look or Read button."
+
+    fun nothingToRepeat(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لا شيء لأكرره بعد. اضغط انظر أو اقرأ."
+        else "Nothing to repeat yet. Tap Look or Read."
+
+    fun handOff(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "لنستخدم أزرار الهاتف الآن." else "Let's use the phone buttons for now."
+
+    fun sorry(l: AssistLanguage) = if (l == AssistLanguage.ARABIC) "عذراً. " else "Sorry. "
+
+    fun languageSwitched(l: AssistLanguage) =
+        if (l == AssistLanguage.ARABIC) "العربية." else "English."
+  }
 
   /** Make model output speakable: strip markdown, collapse whitespace, clamp runaway answers. */
   fun tidy(answer: String, mode: AssistMode): String {
@@ -129,7 +203,7 @@ Task: ASK. Answer the user's question about what is in the picture. If the answe
             .replace(Regex("[*_#`>\\[\\]]"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
-    val maxWords = if (mode == AssistMode.READ) 110 else 32
+    val maxWords = if (mode == AssistMode.READ) 110 else 36
     val words = text.split(' ')
     if (words.size > maxWords) {
       text = words.take(maxWords).joinToString(" ").trimEnd(',', ';', ':') + "."

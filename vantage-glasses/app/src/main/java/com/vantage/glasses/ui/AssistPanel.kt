@@ -55,6 +55,7 @@ fun AssistPanel(
     onAsk: () -> Unit,
     onAgain: () -> Unit,
     onStop: () -> Unit,
+    onToggleLanguage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val enabled = isPreviewLive && !ui.isBusy
@@ -62,7 +63,13 @@ fun AssistPanel(
       modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
-    ConversationCard(ui = ui, isPreviewLive = isPreviewLive, onAgain = onAgain, onStop = onStop)
+    ConversationCard(
+        ui = ui,
+        isPreviewLive = isPreviewLive,
+        onAgain = onAgain,
+        onStop = onStop,
+        onToggleLanguage = onToggleLanguage,
+    )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -109,6 +116,7 @@ private fun ConversationCard(
     isPreviewLive: Boolean,
     onAgain: () -> Unit,
     onStop: () -> Unit,
+    onToggleLanguage: () -> Unit,
 ) {
   val status =
       when {
@@ -156,7 +164,21 @@ private fun ConversationCard(
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
         )
+        Spacer(modifier = Modifier.width(10.dp))
       }
+      // Language switch: EN / AR. Replies, recognizer and voice all follow it.
+      Text(
+          text = ui.language.label,
+          color = Color.White,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          modifier =
+              Modifier.clip(RoundedCornerShape(percent = 50))
+                  .background(Color.White.copy(alpha = 0.18f))
+                  .clickable(enabled = !ui.isBusy, onClick = onToggleLanguage)
+                  .padding(horizontal = 12.dp, vertical = 4.dp)
+                  .testTag("assist_language"),
+      )
     }
     if (ui.heard.isNotBlank()) {
       Row(verticalAlignment = Alignment.Top) {

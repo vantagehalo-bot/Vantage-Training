@@ -49,12 +49,31 @@ class SpokenOutput(context: Context) {
       engine.setSpeechRate(value)
     }
 
+  private var wantedLocale: Locale = Locale.US
+
   private fun applyDefaults() {
-    val result = engine.setLanguage(Locale.getDefault())
-    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+    applyLocale(wantedLocale)
+    engine.setSpeechRate(speechRate)
+  }
+
+  private fun applyLocale(locale: Locale): Boolean {
+    val result = engine.setLanguage(locale)
+    val ok = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+    if (!ok) {
+      Log.w(TAG, "TTS voice for ${locale.toLanguageTag()} not installed; falling back to en-US")
       engine.setLanguage(Locale.US)
     }
-    engine.setSpeechRate(speechRate)
+    return ok
+  }
+
+  /**
+   * Switches the voice. Returns false when the phone has no voice for that language (install one
+   * under Settings > General management > Text-to-speech > Install voice data).
+   */
+  suspend fun setLanguage(locale: Locale): Boolean {
+    wantedLocale = locale
+    if (!ready.await()) return false
+    return applyLocale(locale)
   }
 
   fun earcon(kind: Earcon) {
