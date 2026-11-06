@@ -9,7 +9,8 @@ meta_api_base=https://api.meta.ai/v1
 # Any OpenAI-compatible vision model works as a stand-in. Google Gemini (key from aistudio.google.com):
 #   meta_api_key=AIza...
 #   meta_api_base=https://generativelanguage.googleapis.com/v1beta/openai
-#   meta_model_id=gemini-2.5-flash
+#   meta_model_id=gemini-3.5-flash-lite
+#   meta_model_fallbacks=gemini-3.1-flash-lite,gemini-2.5-flash-lite,gemini-2.5-flash   (optional; this is the default on Gemini)
 # OpenAI:
 #   meta_api_base=https://api.openai.com/v1
 #   meta_model_id=gpt-4o-mini

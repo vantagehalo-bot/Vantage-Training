@@ -38,10 +38,15 @@ sealed interface ModelResult {
   }
 }
 
+/** Free-tier Gemini models, best first; lite models carry a usable daily quota. */
+val GEMINI_FALLBACKS = listOf("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash")
+
 class MetaModelClient(
     private val apiKey: String,
     private val modelId: String,
     private val apiBase: String,
+    /** Tried in order when a model is missing (404), out of quota (429) or down (503). */
+    private val fallbackModels: List<String> = emptyList(),
 ) {
   companion object {
     private const val TAG = "Vantage:Model"
@@ -59,13 +64,37 @@ class MetaModelClient(
   val hasKey: Boolean
     get() = apiKey.isNotBlank()
 
+  /** The model that answered last, so the chain starts from one that works. */
+  @Volatile private var preferred: String = modelId
+
   suspend fun ask(frame: Bitmap, systemPrompt: String, question: String): ModelResult =
       withContext(Dispatchers.IO) {
         if (!hasKey) return@withContext ModelResult.Failure(ModelResult.Failure.Kind.NO_KEY, "no key")
         val jpeg = encodeFrame(frame)
-        val body = buildBody(systemPrompt, question, jpeg)
+        val chain = (listOf(preferred, modelId) + fallbackModels).distinct()
+        var last: ModelResult = ModelResult.Failure(ModelResult.Failure.Kind.EMPTY, "no model")
+        for (model in chain) {
+          val result = askModel(model, systemPrompt, question, jpeg)
+          if (result is ModelResult.Answer) {
+            preferred = model
+            return@withContext result
+          }
+          last = result
+          val retryable =
+              result is ModelResult.Failure &&
+                  result.kind == ModelResult.Failure.Kind.REJECTED &&
+                  (result.detail.startsWith("HTTP 404") || result.detail.startsWith("HTTP 429") ||
+                      result.detail.startsWith("HTTP 503") || result.detail.startsWith("HTTP 500"))
+          if (!retryable) return@withContext result
+          Log.w(TAG, "model $model unavailable (${result.detail.take(12)}); trying the next")
+        }
+        last
+      }
+
+  private fun askModel(model: String, systemPrompt: String, question: String, jpeg: String): ModelResult {
+        val body = buildBody(model, systemPrompt, question, jpeg)
         var connection: HttpURLConnection? = null
-        try {
+        return try {
           connection =
               (URL("${apiBase.trimEnd('/')}/chat/completions").openConnection()
                       as HttpURLConnection)
@@ -82,10 +111,10 @@ class MetaModelClient(
           val code = connection.responseCode
           if (code !in 200..299) {
             val err = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            Log.w(TAG, "Model API rejected the call: HTTP $code")
-            return@withContext ModelResult.Failure(
+            Log.w(TAG, "Model API rejected the call: HTTP $code ($model)")
+            return ModelResult.Failure(
                 ModelResult.Failure.Kind.REJECTED,
-                "HTTP $code ${summarizeError(err)}",
+                "HTTP $code $model ${summarizeError(err)}",
             )
           }
           val text = connection.inputStream.bufferedReader().use { it.readText() }
@@ -129,7 +158,7 @@ class MetaModelClient(
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
   }
 
-  private fun buildBody(systemPrompt: String, question: String, jpegBase64: String): String {
+  private fun buildBody(model: String, systemPrompt: String, question: String, jpegBase64: String): String {
     val content =
         JSONArray()
             .put(JSONObject().put("type", "text").put("text", question))
@@ -147,7 +176,7 @@ class MetaModelClient(
             .put(JSONObject().put("role", "user").put("content", content))
     val body =
         JSONObject()
-            .put("model", modelId)
+            .put("model", model)
             .put("messages", messages)
             .put("max_tokens", MAX_TOKENS)
             .put("temperature", 0.2)

@@ -53,6 +53,8 @@ android {
     buildConfigField("String", "META_API_KEY", prop("meta_api_key", ""))
     buildConfigField("String", "META_MODEL_ID", prop("meta_model_id", "muse-spark-1.3"))
     buildConfigField("String", "META_API_BASE", prop("meta_api_base", "https://api.meta.ai/v1"))
+    // Comma-separated models to try when the first is missing, out of quota or down.
+    buildConfigField("String", "META_MODEL_FALLBACKS", prop("meta_model_fallbacks", ""))
   }
 
   buildTypes {

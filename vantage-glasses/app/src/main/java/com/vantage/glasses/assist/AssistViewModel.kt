@@ -59,6 +59,9 @@ class AssistViewModel(
             apiKey = BuildConfig.META_API_KEY,
             modelId = BuildConfig.META_MODEL_ID,
             apiBase = BuildConfig.META_API_BASE,
+            fallbackModels =
+                BuildConfig.META_MODEL_FALLBACKS.split(',').map { it.trim() }.filter { it.isNotBlank() }
+                    .ifEmpty { if (BuildConfig.META_API_BASE.contains("googleapis.com")) GEMINI_FALLBACKS else emptyList() },
         ),
 ) : AndroidViewModel(application) {
 
