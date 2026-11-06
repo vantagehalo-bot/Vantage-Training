@@ -27,8 +27,19 @@ sealed interface HeardResult {
 }
 
 interface SpeechInput {
-  /** Listens for one utterance and returns when the recognizer finishes or gives up. */
-  suspend fun listenOnce(languageTag: String = "en-US", onPartial: (String) -> Unit = {}): HeardResult
+  /**
+   * Listens for one utterance and returns when the wearer finishes (a pause, [finish], or the
+   * recognizer's limit). [onPartial] streams the words as they are heard; [onLevel] the mic level
+   * 0..1, so the screen can show that the voice is being picked up.
+   */
+  suspend fun listenOnce(
+      languageTag: String = "en-US",
+      onLevel: (Float) -> Unit = {},
+      onPartial: (String) -> Unit = {},
+  ): HeardResult
+
+  /** The wearer says they are done (finger lifted, Done tapped): return what was heard so far. */
+  fun finish()
 
   fun cancel()
 
@@ -43,7 +54,11 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
   private var recognizer: SpeechRecognizer? = null
 
-  override suspend fun listenOnce(languageTag: String, onPartial: (String) -> Unit): HeardResult =
+  override suspend fun listenOnce(
+      languageTag: String,
+      onLevel: (Float) -> Unit,
+      onPartial: (String) -> Unit,
+  ): HeardResult =
       withContext<HeardResult>(Dispatchers.Main) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
           return@withContext HeardResult.Unavailable("no recognition service")
@@ -65,7 +80,10 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
 
                 override fun onBeginningOfSpeech() = Unit
 
-                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onRmsChanged(rmsdB: Float) {
+                  // Typical range is about -2..10 dB; map to 0..1 for the meter.
+                  onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
+                }
 
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
 
@@ -111,13 +129,20 @@ class AndroidSpeechInput(private val context: Context) : SpeechInput {
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                // Bounded listening: stop ~1.2 s after the wearer stops talking.
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+                // Let the wearer finish: a long pause, not the first breath, ends the question.
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 6000L)
               }
           continuation.invokeOnCancellation { finish(HeardResult.NothingHeard) }
           engine.startListening(intent)
         }
       }
+
+  override fun finish() {
+    // stopListening makes the recognizer deliver onResults with what it has.
+    recognizer?.let { runCatching { it.stopListening() } }
+  }
 
   override fun cancel() {
     recognizer?.let { runCatching { it.cancel() } }

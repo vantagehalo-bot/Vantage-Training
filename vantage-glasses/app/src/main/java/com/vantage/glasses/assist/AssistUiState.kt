@@ -25,6 +25,8 @@ data class AssistUiState(
     val shelf: ShelfScene? = null,
     /** Why the last model call failed, for the screen (never spoken): kind and HTTP status. */
     val errorDetail: String? = null,
+    /** Microphone level 0..1 while listening, for the meter. */
+    val micLevel: Float = 0f,
 ) {
   val isBusy: Boolean
     get() = phase != AssistPhase.IDLE && phase != AssistPhase.SPEAKING

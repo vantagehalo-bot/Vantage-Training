@@ -202,9 +202,13 @@ class AssistViewModel(
       return@startTurn
     }
     val heard =
-        speechInput.listenOnce(language.tag) { partial ->
+        speechInput.listenOnce(
+            language.tag,
+            onLevel = { level -> _uiState.update { it.copy(micLevel = level) } },
+        ) { partial ->
           _uiState.update { it.copy(heard = partial) }
         }
+    _uiState.update { it.copy(micLevel = 0f) }
     when (heard) {
       is HeardResult.Heard -> {
         _uiState.update { it.copy(heard = heard.text) }
@@ -221,6 +225,11 @@ class AssistViewModel(
     }
   }
 
+  /** Finger lifted or Done tapped: the question is complete. */
+  fun finishListening() {
+    if (_uiState.value.phase == AssistPhase.LISTENING) speechInput.finish()
+  }
+
   /** A typed or chip question: same path as voice, without the microphone. */
   fun askText(text: String) = startTurn {
     val startedAt = SystemClock.elapsedRealtime()
@@ -229,6 +238,16 @@ class AssistViewModel(
   }
 
   private suspend fun handleCommand(command: VantagePrompts.Command, raw: String, startedAt: Long) {
+    // Shelf shortcuts only mean something once a shelf has been scanned. Otherwise "where is the
+    // Snickers" is a question for the model, with the picture, not a canned line.
+    val shelfCommand =
+        command is VantagePrompts.Command.More || command is VantagePrompts.Command.Exact ||
+            command is VantagePrompts.Command.Cheapest || command is VantagePrompts.Command.Where ||
+            command is VantagePrompts.Command.PriceOf
+    if (shelfCommand && memory.currentShelf == null) {
+      runModelTurn(AssistMode.ASK, raw, startedAt)
+      return
+    }
     when (command) {
       VantagePrompts.Command.Again -> repeatLast()
       VantagePrompts.Command.Stop -> finishIdle()

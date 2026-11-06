@@ -176,7 +176,7 @@ fun CaptionCard(
       when {
         !isPreviewLive -> "Start the preview to use Vantage."
         !ui.hasApiKey -> "Add meta_api_key to local.properties to enable answers."
-        ui.phase == AssistPhase.LISTENING -> "Listening…"
+        ui.phase == AssistPhase.LISTENING -> "Listening… speak, then lift your finger or tap Done"
         ui.phase == AssistPhase.CAPTURING -> "Taking one picture…"
         ui.phase == AssistPhase.THINKING -> "Checking…"
         ui.phase == AssistPhase.SPEAKING -> "Speaking"
@@ -219,7 +219,28 @@ fun CaptionCard(
           modifier = Modifier.fillMaxWidth().testTag("assist_error_detail"),
       )
     }
-    if (ui.heard.isNotBlank()) {
+    if (ui.phase == AssistPhase.LISTENING) {
+      // Mic level, so the wearer's helper can see the voice is being picked up.
+      Box(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Vantage.Line)) {
+        Box(
+            modifier =
+                Modifier.fillMaxWidth(ui.micLevel.coerceIn(0.03f, 1f))
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Vantage.Amber),
+        )
+      }
+      Text(
+          text = if (ui.heard.isBlank()) "…" else ui.heard,
+          color = Vantage.Fg,
+          fontSize = if (arabic) 26.sp else 22.sp,
+          lineHeight = if (arabic) 36.sp else 28.sp,
+          fontWeight = FontWeight.Bold,
+          fontFamily = if (arabic) Vantage.Arabic else Vantage.Sans,
+          textAlign = if (arabic) TextAlign.Right else TextAlign.Left,
+          modifier = Modifier.fillMaxWidth().testTag("assist_live_transcript"),
+      )
+    } else if (ui.heard.isNotBlank()) {
       Text(
           text = ui.heard,
           color = Vantage.Muted,
@@ -229,7 +250,7 @@ fun CaptionCard(
           modifier = Modifier.fillMaxWidth().testTag("assist_heard"),
       )
     }
-    if (line.isNotBlank()) {
+    if (line.isNotBlank() && ui.phase != AssistPhase.LISTENING) {
       Text(
           text = line,
           color = if (ui.lastWasError) Vantage.Amber else Vantage.Fg,
@@ -304,6 +325,7 @@ fun GestureLayer(
     onTap: () -> Unit,
     onDoubleTap: () -> Unit,
     onLongPress: () -> Unit,
+    onRelease: () -> Unit,
     onSwipeDown: () -> Unit,
     onSwipeBack: () -> Unit,
     onSwipeUp: () -> Unit,
@@ -316,10 +338,14 @@ fun GestureLayer(
               .fillMaxSize()
               .semantics {
                 role = Role.Button
-                contentDescription = "Vantage. Tap to look, double tap to read, hold to ask, swipe down to stop, swipe back to repeat, swipe up for the shelf."
+                contentDescription = "Vantage. Tap to look, double tap to read, hold to ask and lift to send, swipe down to stop, swipe back to repeat, swipe up for the shelf."
               }
               .pointerInput(Unit) {
                 detectTapGestures(
+                    onPress = {
+                      tryAwaitRelease()
+                      onRelease()
+                    },
                     onTap = { onTap() },
                     onDoubleTap = { onDoubleTap() },
                     onLongPress = { onLongPress() },
@@ -357,6 +383,7 @@ fun VantageControls(
     onRead: () -> Unit,
     onShelf: () -> Unit,
     onAsk: () -> Unit,
+    onDone: () -> Unit,
     onAgain: () -> Unit,
     onStop: () -> Unit,
     onToggleLanguage: () -> Unit,
@@ -371,7 +398,11 @@ fun VantageControls(
       Pill(Modifier.weight(1f).testTag("assist_look"), Icons.Filled.Visibility, "Look", enabled, onLook)
       Pill(Modifier.weight(1f).testTag("assist_read"), Icons.Filled.MenuBook, "Read", enabled, onRead)
       Pill(Modifier.weight(1f).testTag("assist_shelf"), Icons.Filled.ShoppingCart, "Shelf", enabled, onShelf)
-      Pill(Modifier.weight(1f).testTag("assist_ask"), Icons.Filled.Mic, "Ask", enabled, onAsk, accent = true)
+      if (ui.phase == AssistPhase.LISTENING) {
+        Pill(Modifier.weight(1f).testTag("assist_done"), Icons.Filled.Mic, "Done", true, onDone, accent = true)
+      } else {
+        Pill(Modifier.weight(1f).testTag("assist_ask"), Icons.Filled.Mic, "Ask", enabled, onAsk, accent = true)
+      }
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
