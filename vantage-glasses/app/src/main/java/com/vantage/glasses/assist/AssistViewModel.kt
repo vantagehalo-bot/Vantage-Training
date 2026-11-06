@@ -132,7 +132,24 @@ class AssistViewModel(
     if (!wanted && awareness.isRunning) awareness.stop()
   }
 
-  fun toggleAwareness() = settings.update { it.copy(awarenessOn = !it.awarenessOn) }
+  /** The Obstacles button: the only thing that starts the on-device detector. Vee confirms. */
+  fun toggleAwareness() {
+    val on = !settings.value.awarenessOn
+    settings.update { it.copy(awarenessOn = on) }
+    startTurn {
+      speakLine(
+          if (on) VantagePrompts.Lines.obstaclesOn(language) else VantagePrompts.Lines.obstaclesOff(language),
+          SystemClock.elapsedRealtime(),
+          isError = false,
+      )
+    }
+  }
+
+  /** Vee introduces herself on the welcome screen. */
+  fun greet() = startTurn { speakLine(VantagePrompts.Lines.welcome(language), SystemClock.elapsedRealtime(), isError = false) }
+
+  /** Vee says her eyes are open once the stream is live after Begin. */
+  fun eyesOpen() = startTurn { speakLine(VantagePrompts.Lines.eyesOpen(language), SystemClock.elapsedRealtime(), isError = false) }
 
   fun toggleDescribe() = settings.update { it.copy(describeMode = !it.describeMode) }
 
@@ -322,6 +339,7 @@ class AssistViewModel(
               frame = frame,
               systemPrompt = VantagePrompts.systemPrompt(mode, language),
               question = VantagePrompts.userText(mode, question),
+              history = if (mode == AssistMode.ASK) memory.conversation else emptyList(),
           )
         } finally {
           // Send, answer, delete: the frame does not outlive the call.
@@ -356,7 +374,7 @@ class AssistViewModel(
         } else {
           val text = VantagePrompts.tidy(result.text, mode)
           _uiState.update { it.copy(phase = AssistPhase.SPEAKING, spoken = text, totalMillis = totalMillis) }
-          memory.remember(text, mode)
+          memory.remember(text, mode, VantagePrompts.userText(mode, question))
           output.say(text)
         }
         output.earcon(Earcon.DONE)

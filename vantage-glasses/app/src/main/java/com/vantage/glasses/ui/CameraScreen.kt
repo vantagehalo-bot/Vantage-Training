@@ -147,6 +147,34 @@ fun CameraScreen(
     }
   }
   val touched: () -> Unit = { lastTouch = System.currentTimeMillis() }
+  // Welcome -> eyes. Begin starts the session; once it is active the preview starts by itself.
+  var begun by remember { mutableStateOf(false) }
+  var eyesAnnounced by remember { mutableStateOf(false) }
+  LaunchedEffect(begun, ui.isSessionActive, ui.hasStream, ui.isBusy) {
+    if (begun && ui.isSessionActive && !ui.hasStream && !ui.isBusy) cameraViewModel.startStreaming()
+  }
+  LaunchedEffect(ui.isStreaming) {
+    if (begun && ui.isStreaming && !eyesAnnounced) {
+      eyesAnnounced = true
+      delay(600)
+      assistViewModel.eyesOpen()
+    }
+  }
+  if (!begun) {
+    WelcomeScreen(
+        phase = assistUi.phase,
+        language = assistUi.language,
+        canBegin = wearablesUi.hasActiveDevice && !isUpdateRequired,
+        onGreet = assistViewModel::greet,
+        onBegin = {
+          begun = true
+          if (!ui.hasSession) cameraViewModel.startSession()
+        },
+        onToggleLanguage = assistViewModel::toggleLanguage,
+        onMockSetup = wearablesViewModel::showDebugMenu,
+    )
+    return
+  }
   val activity = LocalActivity.current
   var showSettingsMenu by remember { mutableStateOf(false) }
 

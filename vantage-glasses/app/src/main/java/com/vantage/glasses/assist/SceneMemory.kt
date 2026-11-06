@@ -23,16 +23,25 @@ data class ShelfScene(
     val capturedAt: Long = SystemClock.elapsedRealtime(),
 )
 
-data class SpokenAnswer(val text: String, val mode: AssistMode, val at: Long = SystemClock.elapsedRealtime())
+data class SpokenAnswer(
+    val text: String,
+    val mode: AssistMode,
+    val question: String? = null,
+    val at: Long = SystemClock.elapsedRealtime(),
+)
 
 class SceneMemory(private val ttlMs: Long = 60_000L) {
   private val answers = ArrayDeque<SpokenAnswer>()
   private var shelf: ShelfScene? = null
 
-  fun remember(text: String, mode: AssistMode) {
-    answers.addFirst(SpokenAnswer(text, mode))
-    while (answers.size > 3) answers.removeLast()
+  fun remember(text: String, mode: AssistMode, question: String? = null) {
+    answers.addFirst(SpokenAnswer(text, mode, question))
+    while (answers.size > 4) answers.removeLast()
   }
+
+  /** The conversation so far, oldest first, as (question, answer): what the model needs for follow-ups. */
+  val conversation: List<Pair<String, String>>
+    get() = recent.reversed().map { (it.question ?: it.mode.name.lowercase()) to it.text }
 
   fun rememberShelf(scene: ShelfScene) {
     shelf = scene

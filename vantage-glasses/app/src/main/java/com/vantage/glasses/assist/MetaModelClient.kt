@@ -67,14 +67,23 @@ class MetaModelClient(
   /** The model that answered last, so the chain starts from one that works. */
   @Volatile private var preferred: String = modelId
 
-  suspend fun ask(frame: Bitmap, systemPrompt: String, question: String): ModelResult =
+  /**
+   * [history] is earlier (question, answer) pairs of this conversation, text only, oldest first, so
+   * follow-ups like "the left one" make sense. Frames from earlier turns are never resent.
+   */
+  suspend fun ask(
+      frame: Bitmap,
+      systemPrompt: String,
+      question: String,
+      history: List<Pair<String, String>> = emptyList(),
+  ): ModelResult =
       withContext(Dispatchers.IO) {
         if (!hasKey) return@withContext ModelResult.Failure(ModelResult.Failure.Kind.NO_KEY, "no key")
         val jpeg = encodeFrame(frame)
         val chain = (listOf(preferred, modelId) + fallbackModels).distinct()
         var last: ModelResult = ModelResult.Failure(ModelResult.Failure.Kind.EMPTY, "no model")
         for (model in chain) {
-          val result = askModel(model, systemPrompt, question, jpeg)
+          val result = askModel(model, systemPrompt, question, jpeg, history)
           if (result is ModelResult.Answer) {
             preferred = model
             return@withContext result
@@ -91,8 +100,14 @@ class MetaModelClient(
         last
       }
 
-  private fun askModel(model: String, systemPrompt: String, question: String, jpeg: String): ModelResult {
-        val body = buildBody(model, systemPrompt, question, jpeg)
+  private fun askModel(
+      model: String,
+      systemPrompt: String,
+      question: String,
+      jpeg: String,
+      history: List<Pair<String, String>>,
+  ): ModelResult {
+        val body = buildBody(model, systemPrompt, question, jpeg, history)
         var connection: HttpURLConnection? = null
         return try {
           connection =
@@ -158,7 +173,13 @@ class MetaModelClient(
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
   }
 
-  private fun buildBody(model: String, systemPrompt: String, question: String, jpegBase64: String): String {
+  private fun buildBody(
+      model: String,
+      systemPrompt: String,
+      question: String,
+      jpegBase64: String,
+      history: List<Pair<String, String>>,
+  ): String {
     val content =
         JSONArray()
             .put(JSONObject().put("type", "text").put("text", question))
@@ -170,10 +191,12 @@ class MetaModelClient(
                         JSONObject().put("url", "data:image/jpeg;base64,$jpegBase64"),
                     ),
             )
-    val messages =
-        JSONArray()
-            .put(JSONObject().put("role", "system").put("content", systemPrompt))
-            .put(JSONObject().put("role", "user").put("content", content))
+    val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt))
+    for ((q, a) in history) {
+      messages.put(JSONObject().put("role", "user").put("content", q))
+      messages.put(JSONObject().put("role", "assistant").put("content", a))
+    }
+    messages.put(JSONObject().put("role", "user").put("content", content))
     val body =
         JSONObject()
             .put("model", model)

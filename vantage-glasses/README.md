@@ -26,6 +26,15 @@ speech; reading matters most; hazards first) shaped this app.
   **60-second demo and pitch.** docs/DEMO.md. **30-case eval set.** docs/EVALS.md.
   **Agent rules.** AGENTS.md (also CLAUDE.md).
 
+## Meet Vee
+
+Vantage speaks as **Vee**, the eye on the glasses: warm, brief, honest, and she asks a short
+follow-up when it helps ("Want the price?"). The app opens on a welcome screen where Vee
+introduces herself; one tap on **Begin** starts the session and the preview, and Vee says "My eyes
+are open." Ask keeps the last few exchanges, so "the left one" or "yes" make sense. The animated eye
+in the caption card blinks, widens while she listens, orbits while she thinks and pulses while she
+speaks.
+
 ## What it does
 
 | Mode | Trigger | Vantage says |

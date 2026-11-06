@@ -180,7 +180,7 @@ fun CaptionCard(
         ui.phase == AssistPhase.CAPTURING -> "Taking one picture…"
         ui.phase == AssistPhase.THINKING -> "Checking…"
         ui.phase == AssistPhase.SPEAKING -> "Speaking"
-        else -> "Tap: look · double tap: read · hold: ask"
+        else -> "Vee is listening for a tap. Tap: look · double tap: read · hold: ask"
       }
   Column(
       modifier =
@@ -192,6 +192,8 @@ fun CaptionCard(
       verticalArrangement = Arrangement.spacedBy(6.dp),
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+      EyeAvatar(phase = ui.phase, size = 28.dp)
+      Spacer(modifier = Modifier.width(10.dp))
       Text(
           text = status,
           color = Vantage.Muted,
@@ -380,7 +382,7 @@ fun VantageControls(
       Small(Icons.Filled.Stop, "Stop", ui.phase != AssistPhase.IDLE, onStop)
       Spacer(modifier = Modifier.weight(1f))
       Text(
-          text = if (alertsOn) "Alerts on" else "Alerts off",
+          text = if (alertsOn) "Obstacles on" else "Obstacles",
           color = if (alertsOn) Vantage.Bg else Vantage.Fg,
           fontSize = 13.sp,
           fontWeight = FontWeight.Bold,
