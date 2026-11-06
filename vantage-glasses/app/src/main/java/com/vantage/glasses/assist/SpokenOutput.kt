@@ -7,6 +7,7 @@
 package com.vantage.glasses.assist
 
 import android.content.Context
+import android.media.AudioAttributes
 import com.vantage.glasses.voice.Earcons
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -54,6 +55,13 @@ class SpokenOutput(context: Context) {
   private var wantedLocale: Locale = Locale.US
 
   private fun applyDefaults() {
+    // Speech goes out as media, so a screen recording with "media sounds" captures Vee's voice.
+    engine.setAudioAttributes(
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build(),
+    )
     applyLocale(wantedLocale)
     engine.setSpeechRate(speechRate)
   }
