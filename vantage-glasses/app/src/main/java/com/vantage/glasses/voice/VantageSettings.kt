@@ -12,7 +12,7 @@ data class Settings(
     val warningCm: Int = 100,
     val repeatSec: Float = 2.5f,
     val threshold: Float = 0.55f,
-    val awarenessOn: Boolean = true,
+    val awarenessOn: Boolean = false,
     val describeMode: Boolean = false,
     val speechRate: Float = 1.15f,
     val language: AssistLanguage = AssistLanguage.ENGLISH,
@@ -30,7 +30,7 @@ class VantageSettings(context: Context) {
               warningCm = prefs.getInt("warningCm", 100),
               repeatSec = prefs.getFloat("repeatSec", 2.5f),
               threshold = prefs.getFloat("threshold", 0.55f),
-              awarenessOn = prefs.getBoolean("awarenessOn", true),
+              awarenessOn = prefs.getBoolean("awarenessOn", false),
               describeMode = prefs.getBoolean("describeMode", false),
               speechRate = prefs.getFloat("speechRate", 1.15f),
               language =

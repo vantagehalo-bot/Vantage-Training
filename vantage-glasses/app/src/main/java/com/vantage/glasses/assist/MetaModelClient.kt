@@ -53,7 +53,7 @@ class MetaModelClient(
     private const val JPEG_QUALITY = 70
     // Muse Spark is a reasoning model: hidden reasoning counts against this limit, so it must be
     // far above the ~40 spoken tokens we want or the visible answer comes back empty.
-    private const val MAX_TOKENS = 2048
+    private const val MAX_TOKENS = 4096
   }
 
   val hasKey: Boolean
@@ -145,12 +145,15 @@ class MetaModelClient(
         JSONArray()
             .put(JSONObject().put("role", "system").put("content", systemPrompt))
             .put(JSONObject().put("role", "user").put("content", content))
-    return JSONObject()
-        .put("model", modelId)
-        .put("messages", messages)
-        .put("max_tokens", MAX_TOKENS)
-        .put("temperature", 0.2)
-        .toString()
+    val body =
+        JSONObject()
+            .put("model", modelId)
+            .put("messages", messages)
+            .put("max_tokens", MAX_TOKENS)
+            .put("temperature", 0.2)
+    // Gemini's OpenAI-compatible endpoint: keep hidden reasoning short so the answer fits the cap.
+    if (apiBase.contains("googleapis.com")) body.put("reasoning_effort", "low")
+    return body.toString()
   }
 
   private fun parseAnswer(json: String): String? {

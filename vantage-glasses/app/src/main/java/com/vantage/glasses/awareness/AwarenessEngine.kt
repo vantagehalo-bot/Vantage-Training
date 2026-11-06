@@ -10,7 +10,6 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
 import com.vantage.glasses.assist.FrameSource
-import com.vantage.glasses.voice.Priority
 import com.vantage.glasses.voice.SpeechMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -50,8 +49,11 @@ class AwarenessEngine(
 
   private var job: Job? = null
 
-  /** Set by the assist flow: true while a turn is in progress, so warnings wait. */
+  /** Set by the assist flow: true while a turn is in progress. No alert at all gets through then. */
   @Volatile var yieldToAssist: Boolean = false
+
+  /** Alerts also stay quiet for a moment after a turn, so an answer is never stepped on. */
+  @Volatile var quietUntil: Long = 0L
 
   fun start() {
     if (job != null) return
@@ -87,8 +89,9 @@ class AwarenessEngine(
                         tracks = announcer.confirmed,
                         fps = fps,
                     )
+                val muted = yieldToAssist || now < quietUntil
                 for (m in messages) {
-                  if (yieldToAssist && m.priority != Priority.CRITICAL) continue
+                  if (muted) continue
                   withContext(Dispatchers.Main) { speak(m) }
                 }
               }

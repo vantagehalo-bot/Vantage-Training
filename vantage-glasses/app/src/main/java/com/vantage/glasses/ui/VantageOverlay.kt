@@ -208,6 +208,15 @@ fun CaptionCard(
         )
       }
     }
+    ui.errorDetail?.let { detail ->
+      Text(
+          text = detail,
+          color = Vantage.Amber,
+          fontSize = 11.sp,
+          fontFamily = FontFamily.Monospace,
+          modifier = Modifier.fillMaxWidth().testTag("assist_error_detail"),
+      )
+    }
     if (ui.heard.isNotBlank()) {
       Text(
           text = ui.heard,
@@ -350,6 +359,8 @@ fun VantageControls(
     onStop: () -> Unit,
     onToggleLanguage: () -> Unit,
     onSettings: () -> Unit,
+    alertsOn: Boolean,
+    onToggleAlerts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val enabled = isPreviewLive && !ui.isBusy
@@ -368,6 +379,20 @@ fun VantageControls(
       Small(Icons.Filled.Replay, "Again", ui.canRepeat && ui.phase == AssistPhase.IDLE, onAgain)
       Small(Icons.Filled.Stop, "Stop", ui.phase != AssistPhase.IDLE, onStop)
       Spacer(modifier = Modifier.weight(1f))
+      Text(
+          text = if (alertsOn) "Alerts on" else "Alerts off",
+          color = if (alertsOn) Vantage.Bg else Vantage.Fg,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          fontFamily = Vantage.Sans,
+          modifier =
+              Modifier.clip(RoundedCornerShape(percent = 50))
+                  .background(if (alertsOn) Vantage.Amber else Vantage.Surface)
+                  .border(BorderStroke(1.dp, Vantage.Line), RoundedCornerShape(percent = 50))
+                  .clickable(enabled = isPreviewLive, onClick = onToggleAlerts)
+                  .padding(horizontal = 12.dp, vertical = 5.dp)
+                  .testTag("assist_alerts"),
+      )
       Text(
           text = ui.language.label,
           color = Vantage.Bg,

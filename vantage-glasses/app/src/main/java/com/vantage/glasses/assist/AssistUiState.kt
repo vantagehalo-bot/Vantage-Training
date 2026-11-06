@@ -23,6 +23,8 @@ data class AssistUiState(
     val language: AssistLanguage = AssistLanguage.ENGLISH,
     /** The last shelf scan, for the on-screen list. */
     val shelf: ShelfScene? = null,
+    /** Why the last model call failed, for the screen (never spoken): kind and HTTP status. */
+    val errorDetail: String? = null,
 ) {
   val isBusy: Boolean
     get() = phase != AssistPhase.IDLE && phase != AssistPhase.SPEAKING

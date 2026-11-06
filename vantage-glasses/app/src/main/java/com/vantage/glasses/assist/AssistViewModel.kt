@@ -66,6 +66,7 @@ class AssistViewModel(
     private const val TAG = "Vantage:Assist"
     private const val WORKING_LINE_AFTER_MS = 1_500L
     private const val MAX_ERROR_STREAK = 3
+    private const val QUIET_AFTER_TURN_MS = 3_000L
   }
 
   private val _uiState =
@@ -242,6 +243,7 @@ class AssistViewModel(
     speechInput.cancel()
     viewModelScope.launch { queue.clear() }
     output.stop()
+    awareness.quietUntil = SystemClock.elapsedRealtime() + QUIET_AFTER_TURN_MS
     awareness.yieldToAssist = false
     _uiState.update { it.copy(phase = AssistPhase.IDLE) }
   }
@@ -275,6 +277,7 @@ class AssistViewModel(
             Log.e(TAG, "turn failed: ${e.javaClass.simpleName}")
             speakRepair(VantagePrompts.Lines.rejected(language), SystemClock.elapsedRealtime())
           } finally {
+            awareness.quietUntil = SystemClock.elapsedRealtime() + QUIET_AFTER_TURN_MS
             awareness.yieldToAssist = false
           }
         }
@@ -327,6 +330,7 @@ class AssistViewModel(
     when (result) {
       is ModelResult.Answer -> {
         errorStreak = 0
+        _uiState.update { it.copy(errorDetail = null) }
         val totalMillis = SystemClock.elapsedRealtime() - startedAt
         Log.i(TAG, "turn ok mode=$mode ack=${ackMillis}ms total=${totalMillis}ms")
         if (mode == AssistMode.SHELF) {
@@ -366,6 +370,7 @@ class AssistViewModel(
               ModelResult.Failure.Kind.EMPTY -> VantagePrompts.Lines.rejected(language)
             }
         errorStreak++
+        _uiState.update { it.copy(errorDetail = "${result.kind.name.lowercase()}: ${result.detail}".take(160)) }
         speakRepair(line, startedAt)
       }
     }

@@ -30,7 +30,7 @@ speech; reading matters most; hazards first) shaped this app.
 
 | Mode | Trigger | Vantage says |
 |---|---|---|
-| **Awareness** | Always on while the preview runs (Settings) | On-device detector + the firmware's announcer: "Person too close, forty centimetres" with the two-tone beep; "Chair ahead, eighty centimetres". No frame leaves the phone. |
+| **Alerts** | Off by default; the "Alerts" pill or Settings turns obstacle mode on | On-device detector + the firmware's announcer: "Person too close, forty centimetres" with the two-tone beep; "Chair ahead, eighty centimetres". No frame leaves the phone. Silent during any Look / Read / Shelf / Ask turn and for three seconds after. |
 | **Look** | Tap anywhere, Look button, "look" | Nearest hazard, distance, direction, one instruction. Under 20 words. |
 | **Read** | Double tap, Read button, "read" | The text in view, in reading order. "More below" after ~80 words. |
 | **Shelf** | Swipe up, Shelf button, "shelf", "prices" | The gist ladder: a 12-word gist, then "more" (one line per kind), "exact" (every item and price), "cheapest", "where is the milk", "price of the juice", all from memory. |

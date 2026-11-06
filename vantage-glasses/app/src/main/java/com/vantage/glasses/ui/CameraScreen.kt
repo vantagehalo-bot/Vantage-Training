@@ -232,6 +232,8 @@ fun CameraScreen(
                 onStop = { touched(); assistViewModel.stop() },
                 onToggleLanguage = { touched(); assistViewModel.toggleLanguage() },
                 onSettings = { touched(); showSettings = true },
+                alertsOn = settings.awarenessOn,
+                onToggleAlerts = { touched(); assistViewModel.toggleAwareness() },
             )
           }
         }
