@@ -201,29 +201,39 @@ class AssistViewModel(
       speakRepair(VantagePrompts.Lines.micOff(language), startedAt)
       return@startTurn
     }
-    val heard =
-        speechInput.listenOnce(
-            language.tag,
-            onLevel = { level -> _uiState.update { it.copy(micLevel = level) } },
-        ) { partial ->
-          _uiState.update { it.copy(heard = partial) }
-        }
+    var heard = listen()
+    // A finger lifted too soon, or the recognizer not ready yet: listen once more before giving up.
+    if (heard == HeardResult.NothingHeard && _uiState.value.heard.isBlank() &&
+        SystemClock.elapsedRealtime() - startedAt < 2_500L) {
+      output.earcon(Earcon.LISTENING)
+      heard = listen()
+    }
     _uiState.update { it.copy(micLevel = 0f) }
     when (heard) {
       is HeardResult.Heard -> {
-        _uiState.update { it.copy(heard = heard.text) }
+        _uiState.update { it.copy(heard = heard.text, errorDetail = null) }
         handleCommand(VantagePrompts.parseCommand(heard.text), heard.text, startedAt)
       }
       HeardResult.NothingHeard -> {
         errorStreak++
+        _uiState.update { it.copy(errorDetail = "nothing heard: hold longer and speak, then lift") }
         speakRepair(VantagePrompts.Lines.nothingHeard(errorStreak, language), startedAt)
       }
       is HeardResult.Unavailable -> {
         Log.w(TAG, "speech unavailable: ${heard.reason}")
+        _uiState.update { it.copy(errorDetail = "speech: ${heard.reason}") }
         speakRepair(VantagePrompts.Lines.voiceUnavailable(language), startedAt)
       }
     }
   }
+
+  private suspend fun listen(): HeardResult =
+      speechInput.listenOnce(
+          language.tag,
+          onLevel = { level -> _uiState.update { it.copy(micLevel = level) } },
+      ) { partial ->
+        _uiState.update { it.copy(heard = partial) }
+      }
 
   /** Finger lifted or Done tapped: the question is complete. */
   fun finishListening() {
@@ -429,11 +439,11 @@ class AssistViewModel(
 
   private suspend fun speakRepair(line: String, startedAt: Long) {
     output.earcon(Earcon.ERROR)
-    // One apology at most, and after three errors in a row stop talking: the screen still shows the
-    // line, and the buttons keep working. Hand off instead of looping.
+    // One apology at most; the real reason is always said, and after three in a row Vee adds the
+    // hand-off once instead of replacing the reason with it.
     val text =
         when {
-          errorStreak >= MAX_ERROR_STREAK -> VantagePrompts.Lines.handOff(language)
+          errorStreak == MAX_ERROR_STREAK -> line + " " + VantagePrompts.Lines.handOff(language)
           !apologized && errorStreak >= 2 -> {
             apologized = true
             VantagePrompts.Lines.sorry(language) + line
@@ -453,6 +463,7 @@ class AssistViewModel(
       )
     }
     if (remember != null && !isError) memory.remember(text, remember)
+    if (!isError) errorStreak = 0
     output.say(text)
     finishIdle()
   }
