@@ -323,6 +323,46 @@ You can also test any photo directly:
 python3 vantage_reader.py --image photo.jpg --save-debug debug/ --speak
 ```
 
+## 5. Proximity haptics (`vantage_proximity.py`)
+
+The closer something is to the VL53L3CX time-of-flight sensor, the harder the
+vibration motor buzzes. Past `--far` (1200 mm) the motor is off. Between `--far` and
+`--near`, it pulses faster and stronger as things get closer, like a parking sensor.
+Inside `--near` (150 mm) it buzzes continuously at full strength. If the sensor stops
+sending data, the motor stops.
+
+Wiring:
+
+| Part | Pin | Nano header |
+|---|---|---|
+| ToF VIN/VCC | 3.3 V | pin 1 |
+| ToF GND | GND | pin 9 |
+| ToF SDA | SDA | pin 3 |
+| ToF SCL | SCL | pin 5 |
+| Motor VCC | 5 V | pin 4 |
+| Motor GND | GND | pin 14 |
+| Motor IN | GPIO17 | pin 11 |
+
+Setup (once): turn on I2C, then build the sensor driver.
+
+```bash
+sudo raspi-config nonint do_i2c 0
+sudo apt install -y build-essential git i2c-tools python3-gpiozero python3-lgpio
+git clone https://github.com/ned14/VL53L3CX_rasppi.git ~/VL53L3CX_rasppi
+cd ~/VL53L3CX_rasppi && make && make example
+i2cdetect -y 1        # the sensor shows up as 29
+```
+
+Run:
+
+```bash
+python3 vantage_proximity.py                         # defaults
+python3 vantage_proximity.py --near 200 --far 1500   # change the range (mm)
+python3 vantage_proximity.py --mode intensity        # strength only, no pulsing
+python3 vantage_proximity.py --min-duty 0.45         # if the motor doesn't start at low levels
+python3 vantage_proximity.py --simulate              # no hardware needed
+```
+
 ## Troubleshooting
 
 | Symptom | Fix |
