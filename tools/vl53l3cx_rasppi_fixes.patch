@@ -90,7 +90,7 @@ index 3512eb9..5b0d0fd 100644
 -static int i2c_write(int fd, uint16_t cmd, uint8_t * data, uint8_t len){
 +/* Vantage: retry each transfer a few times so an occasional bus glitch (long jumper
 + * wires) does not abort the sensor setup half-way. */
-+#define I2C_RETRIES 5
++#define VANTAGE_I2C_RETRIES 5
  
 -#if 0
 -    // Looks like i2c-dev doesn't support writev
@@ -113,7 +113,7 @@ index 3512eb9..5b0d0fd 100644
      memcpy(buf + 2, data, len);
 -    if (write(fd, buf, len + 2) != len+2) {
 -        free(buf);
-+    for (attempt = 0; attempt < I2C_RETRIES && !ok; attempt++) {
++    for (attempt = 0; attempt < VANTAGE_I2C_RETRIES && !ok; attempt++) {
 +        if (write(fd, buf, len + 2) == len + 2)
 +            ok = 1;
 +        else
@@ -137,7 +137,7 @@ index 3512eb9..5b0d0fd 100644
 -        printf("Failed to write to the i2c bus due to %s.\n", strerror(errno));
 -        return VL53LX_ERROR_CONTROL_INTERFACE;
 +    int attempt;
-+    for (attempt = 0; attempt < I2C_RETRIES; attempt++) {
++    for (attempt = 0; attempt < VANTAGE_I2C_RETRIES; attempt++) {
 +        if (write(fd, buf, 2) == 2 && read(fd, data, len) == len)
 +            return VL53LX_ERROR_NONE;
 +        usleep(1000);
