@@ -159,9 +159,12 @@ class TofReader(threading.Thread):
     def run(self) -> None:
         backoff = 1.0
         while not self.stop.is_set():
+            frames_before = self.frames
             self._run_once()
             if self.stop.is_set():
                 break
+            if self.frames > frames_before:
+                backoff = 1.0          # it was measuring: restart quickly
             if not self.status.startswith(("cannot", "driver says")):
                 self.status = "driver stopped - restarting"
             self.stop.wait(backoff)

@@ -349,9 +349,21 @@ Setup (once): turn on I2C, then build the sensor driver.
 sudo raspi-config nonint do_i2c 0
 sudo apt install -y build-essential git i2c-tools python3-gpiozero python3-lgpio
 git clone https://github.com/ned14/VL53L3CX_rasppi.git ~/VL53L3CX_rasppi
-cd ~/VL53L3CX_rasppi && make && make example
+cd ~/VL53L3CX_rasppi
+git apply ~/Vantage-Training/tools/vl53l3cx_rasppi_fixes.patch   # CM5 fixes, see below
+make clean && make && make example
 i2cdetect -y 1        # the sensor shows up as 29
+~/VL53L3CX_rasppi/bin/main   # prints D= ...mm lines; Ctrl+C to stop
 ```
+
+`tools/vl53l3cx_rasppi_fixes.patch` makes three changes to the driver:
+- **7-bit I2C addressing.** The original turned on 10-bit addressing, which the CM5's I2C
+  hardware actually applies, so every transfer failed.
+- **Retries.** Each transfer is retried up to 5 times, so an occasional glitch on long
+  jumper wires doesn't break the setup.
+- **Errors are reported.** The example program now exits with a message when a step
+  fails or no measurement arrives for 2 seconds, instead of hanging silently.
+  `vantage_proximity.py` then restarts it.
 
 Run:
 

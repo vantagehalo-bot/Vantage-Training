@@ -1,0 +1,157 @@
+diff --git a/example/main.c b/example/main.c
+index 304ff74..01409d2 100644
+--- a/example/main.c
++++ b/example/main.c
+@@ -34,6 +34,7 @@
+ #include <fcntl.h>
+ #include <errno.h>
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <stdint.h>
+ #include <unistd.h>
+ 
+@@ -147,18 +148,35 @@ void RangingLoop(void)
+   int no_of_object_found=0,j;
+   printf("Ranging loop starts\n");
+   
++  /* Vantage: check every setup step and exit with a message instead of hanging
++   * silently, so the caller can restart the program. */
+   status = VL53LX_WaitDeviceBooted(Dev);
++  if(status){ printf("VL53LX_WaitDeviceBooted failed: error = %d\n", status); fflush(stdout); exit(2); }
+   status = VL53LX_DataInit(Dev);
++  if(status){ printf("VL53LX_DataInit failed: error = %d\n", status); fflush(stdout); exit(2); }
+   status = VL53LX_StartMeasurement(Dev);
+-  
+-  if(status){
+-    printf("VL53LX_StartMeasurement failed: error = %d \n", status);
+-    while(1);
+-  }
+-  
++  if(status){ printf("VL53LX_StartMeasurement failed: error = %d\n", status); fflush(stdout); exit(2); }
++  printf("Measuring...\n");
++  fflush(stdout);
++
++  int idle_polls = 0;
+   do{ // polling mode
+-    status = VL53LX_GetMeasurementDataReady(Dev, &NewDataReady);                        
+-    usleep(250000); // 250 millisecond polling period, could be 1 millisecond.
++    status = VL53LX_GetMeasurementDataReady(Dev, &NewDataReady);
++    usleep(20000); // 20 ms polling period
++    if(status){
++      printf("GetMeasurementDataReady failed: error = %d\n", status);
++      fflush(stdout);
++      exit(3);
++    }
++    if(NewDataReady==0){
++      if(++idle_polls > 100){   // no data for ~2 s: the sensor is stuck
++        printf("No measurement for 2 s - giving up\n");
++        fflush(stdout);
++        exit(4);
++      }
++      continue;
++    }
++    idle_polls = 0;
+     if((!status)&&(NewDataReady!=0)){
+       status = VL53LX_GetMultiRangingData(Dev, pMultiRangingData);
+       no_of_object_found=pMultiRangingData->NumberOfObjectsFound;
+@@ -174,6 +192,7 @@ void RangingLoop(void)
+                pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
+       }
+       printf ("\n");
++      fflush(stdout);
+       if (status==0){
+         status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
+       }
+diff --git a/platform/src/vl53lx_platform.c b/platform/src/vl53lx_platform.c
+index 3512eb9..5b0d0fd 100644
+--- a/platform/src/vl53lx_platform.c
++++ b/platform/src/vl53lx_platform.c
+@@ -3,6 +3,7 @@
+ #include <sys/ioctl.h>
+ #include <fcntl.h>
+ #include <errno.h>
++#include <string.h>
+ #include <time.h>
+ #include <linux/i2c-dev.h>
+ #include <unistd.h>
+@@ -23,7 +24,7 @@ int VL53LX_i2c_init(char * devPath, int devAddr)
+         /* ERROR HANDLING; you can check errno to see what went wrong */
+         return -1;
+     }
+-    if (ioctl(file, I2C_TENBIT, 1) < 0) {
++    if (ioctl(file, I2C_TENBIT, 0) < 0) {
+       printf("Failed to set ten bit addressing.\n");
+       /* ERROR HANDLING; you can check errno to see what went wrong */
+       return -1;
+@@ -37,49 +38,42 @@ int32_t VL53LX_i2c_close(void)
+     return VL53LX_ERROR_NOT_IMPLEMENTED;
+ }
+ 
+-static int i2c_write(int fd, uint16_t cmd, uint8_t * data, uint8_t len){
++/* Vantage: retry each transfer a few times so an occasional bus glitch (long jumper
++ * wires) does not abort the sensor setup half-way. */
++#define I2C_RETRIES 5
+ 
+-#if 0
+-    // Looks like i2c-dev doesn't support writev
+-    struct iovec vec[2];
+-    uint8_t buf[2] = { cmd >> 8, cmd & 0xff };
+-    vec[0].iov_base = buf;
+-    vec[0].iov_len = 2;
+-    vec[1].iov_base = data;
+-    vec[2].iov_len = len;
+-    if (writev(fd, vec, 2) != len+2) {
+-        printf("Failed to write to the i2c bus due to %s.\n", strerror(errno));
+-        return VL53LX_ERROR_CONTROL_INTERFACE;
+-    }
+-#else
++static int i2c_write(int fd, uint16_t cmd, uint8_t * data, uint8_t len){
+     uint8_t *buf = malloc(len + 2);
++    int attempt, ok = 0;
+     buf[0] = cmd >> 8;
+     buf[1] = cmd & 0xff;
+     memcpy(buf + 2, data, len);
+-    if (write(fd, buf, len + 2) != len+2) {
+-        free(buf);
++    for (attempt = 0; attempt < I2C_RETRIES && !ok; attempt++) {
++        if (write(fd, buf, len + 2) == len + 2)
++            ok = 1;
++        else
++            usleep(1000);
++    }
++    free(buf);
++    if (!ok) {
+         printf("Failed to write to the i2c bus due to %s.\n", strerror(errno));
++        fflush(stdout);
+         return VL53LX_ERROR_CONTROL_INTERFACE;
+     }
+-    free(buf);
+-#endif
+     return VL53LX_ERROR_NONE;
+ }
+ 
+ static int i2c_read(int fd, uint16_t cmd, uint8_t * data, uint8_t len){
+-
+     uint8_t buf[2] = { cmd >> 8, cmd & 0xff };
+-    if (write(fd, buf, 2) != 2) {
+-        printf("Failed to write to the i2c bus due to %s.\n", strerror(errno));
+-        return VL53LX_ERROR_CONTROL_INTERFACE;
++    int attempt;
++    for (attempt = 0; attempt < I2C_RETRIES; attempt++) {
++        if (write(fd, buf, 2) == 2 && read(fd, data, len) == len)
++            return VL53LX_ERROR_NONE;
++        usleep(1000);
+     }
+-
+-    if (read(fd, data, len) != len) {
+-        printf("Failed to read from the i2c bus due to %s.\n", strerror(errno));
+-        return VL53LX_ERROR_CONTROL_INTERFACE;
+-    }
+-
+-    return VL53LX_ERROR_NONE;
++    printf("Failed to read from the i2c bus due to %s.\n", strerror(errno));
++    fflush(stdout);
++    return VL53LX_ERROR_CONTROL_INTERFACE;
+ }
+ 
+ VL53LX_Error VL53LX_LockSequenceAccess(VL53LX_DEV Dev){
