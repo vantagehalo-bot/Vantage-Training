@@ -1,5 +1,5 @@
 diff --git a/example/main.c b/example/main.c
-index 304ff74..01409d2 100644
+index 304ff74..798438e 100644
 --- a/example/main.c
 +++ b/example/main.c
 @@ -34,6 +34,7 @@
@@ -10,7 +10,7 @@ index 304ff74..01409d2 100644
  #include <stdint.h>
  #include <unistd.h>
  
-@@ -147,18 +148,35 @@ void RangingLoop(void)
+@@ -147,35 +148,62 @@ void RangingLoop(void)
    int no_of_object_found=0,j;
    printf("Ranging loop starts\n");
    
@@ -53,17 +53,50 @@ index 304ff74..01409d2 100644
 +    idle_polls = 0;
      if((!status)&&(NewDataReady!=0)){
        status = VL53LX_GetMultiRangingData(Dev, pMultiRangingData);
-       no_of_object_found=pMultiRangingData->NumberOfObjectsFound;
-@@ -174,6 +192,7 @@ void RangingLoop(void)
-                pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
+-      no_of_object_found=pMultiRangingData->NumberOfObjectsFound;
+-      printf("Count=%5d, ", pMultiRangingData->StreamCount);
+-      printf("#Objs=%1d ", no_of_object_found);
+-      for(j=0;j<no_of_object_found;j++){
+-        if(j!=0)printf("\n                     ");
+-        printf("status=%d, D=%5dmm, S=%7dmm, Signal=%2.2f Mcps, Ambient=%2.2f Mcps",
+-               pMultiRangingData->RangeData[j].RangeStatus,
+-               pMultiRangingData->RangeData[j].RangeMilliMeter,
+-               pMultiRangingData->RangeData[j].SigmaMilliMeter,
+-               pMultiRangingData->RangeData[j].SignalRateRtnMegaCps/65536.0,
+-               pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
++      if(status == 0){
++        no_of_object_found=pMultiRangingData->NumberOfObjectsFound;
++        printf("Count=%5d, ", pMultiRangingData->StreamCount);
++        printf("#Objs=%1d ", no_of_object_found);
++        for(j=0;j<no_of_object_found;j++){
++          if(j!=0)printf("\n                     ");
++          printf("status=%d, D=%5dmm, S=%7dmm, Signal=%2.2f Mcps, Ambient=%2.2f Mcps",
++                 pMultiRangingData->RangeData[j].RangeStatus,
++                 pMultiRangingData->RangeData[j].RangeMilliMeter,
++                 pMultiRangingData->RangeData[j].SigmaMilliMeter,
++                 pMultiRangingData->RangeData[j].SignalRateRtnMegaCps/65536.0,
++                 pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps/65536.0);
++        }
++        printf ("\n");
++      } else {
++        printf("GetMultiRangingData error = %d (skipping this reading)\n", status);
        }
-       printf ("\n");
+-      printf ("\n");
+-      if (status==0){
+-        status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
 +      fflush(stdout);
-       if (status==0){
-         status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
++      /* Vantage: always ask for the next measurement, even after a bad reading;
++       * otherwise the sensor never raises "data ready" again and ranging stops. */
++      status = VL53LX_ClearInterruptAndStartMeasurement(Dev);
++      if(status){
++        printf("ClearInterruptAndStartMeasurement failed: error = %d\n", status);
++        fflush(stdout);
++        exit(5);
        }
+     }
+   }
 diff --git a/platform/src/vl53lx_platform.c b/platform/src/vl53lx_platform.c
-index 3512eb9..5b0d0fd 100644
+index 3512eb9..1a1e5b1 100644
 --- a/platform/src/vl53lx_platform.c
 +++ b/platform/src/vl53lx_platform.c
 @@ -3,6 +3,7 @@
@@ -90,7 +123,7 @@ index 3512eb9..5b0d0fd 100644
 -static int i2c_write(int fd, uint16_t cmd, uint8_t * data, uint8_t len){
 +/* Vantage: retry each transfer a few times so an occasional bus glitch (long jumper
 + * wires) does not abort the sensor setup half-way. */
-+#define VANTAGE_I2C_RETRIES 5
++#define VANTAGE_I2C_RETRIES 10
  
 -#if 0
 -    // Looks like i2c-dev doesn't support writev
@@ -117,7 +150,7 @@ index 3512eb9..5b0d0fd 100644
 +        if (write(fd, buf, len + 2) == len + 2)
 +            ok = 1;
 +        else
-+            usleep(1000);
++            usleep(2000);
 +    }
 +    free(buf);
 +    if (!ok) {
@@ -140,7 +173,7 @@ index 3512eb9..5b0d0fd 100644
 +    for (attempt = 0; attempt < VANTAGE_I2C_RETRIES; attempt++) {
 +        if (write(fd, buf, 2) == 2 && read(fd, data, len) == len)
 +            return VL53LX_ERROR_NONE;
-+        usleep(1000);
++        usleep(2000);
      }
 -
 -    if (read(fd, data, len) != len) {
