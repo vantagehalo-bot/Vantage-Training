@@ -3,3 +3,13 @@ __pycache__/
 vantage.log*
 vantage_reader.log*
 debug/
+
+# vision/ training pipeline: big or regenerable files
+vision/datasets/
+vision/runs/
+vision/reports/val/
+vision/models/*_imx_model/
+vision/models/*.onnx
+vision/models/*.zip
+yolo*.pt
+vision/yolo*.pt

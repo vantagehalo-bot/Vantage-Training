@@ -108,6 +108,9 @@ SAFETY_CRITICAL_LABELS = {
     "person", "bicycle", "car", "motorcycle", "bus", "truck", "train", "dog", "horse",
     "chair", "bench", "couch", "dining table", "bed", "potted plant", "fire hydrant",
     "stop sign", "traffic light", "suitcase", "refrigerator", "toilet",
+    # Vantage-trained model (vision/taxonomy.py) adds street + indoor obstacles:
+    "stairs", "manhole", "pole", "traffic cone", "trash bin", "railing", "table", "sofa",
+    "utility box", "bike rack", "tree",
 }
 
 # Friendlier spoken names for some COCO labels.
@@ -130,6 +133,8 @@ class Config:
     # --- camera / model ---
     model: str = "/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk"
     labels_file: Optional[str] = None
+    bbox_normalization: Optional[bool] = None  # None = trust the .rpk; True for Ultralytics IMX exports
+    bbox_order: Optional[str] = None          # None = trust the .rpk; "xy" for Ultralytics IMX exports
     camera_num: Optional[int] = None          # None = auto (IMX500 finds itself; CAM0 normally 0)
     width: int = 640
     height: int = 480
@@ -746,6 +751,11 @@ class IMX500Camera(CameraBase):
                 intr.labels = [ln.strip() for ln in fh.read().splitlines()]
         elif getattr(intr, "labels", None) is None:
             intr.labels = list(COCO_LABELS)
+        # Custom-trained YOLO models (vision/ folder) need these two set explicitly.
+        if self.cfg.bbox_normalization is not None:
+            intr.bbox_normalization = self.cfg.bbox_normalization
+        if self.cfg.bbox_order is not None:
+            intr.bbox_order = self.cfg.bbox_order
         if hasattr(intr, "update_with_defaults"):
             intr.update_with_defaults()
         self.intrinsics = intr
@@ -1973,6 +1983,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> Config:
     g = p.add_argument_group("camera")
     g.add_argument("--model", default=d.model, help="IMX500 .rpk object detection network")
     g.add_argument("--labels", dest="labels_file", default=None, help="labels file (one per line)")
+    g.add_argument("--bbox-normalization", action="store_true", default=None,
+                   help="boxes are in pixels, normalise them (needed for Ultralytics/YOLO .rpk)")
+    g.add_argument("--bbox-order", choices=["yx", "xy"], default=None,
+                   help="box coordinate order (Ultralytics/YOLO .rpk uses xy)")
     g.add_argument("--camera-num", type=int, default=None, help="camera index (default: auto-detect IMX500)")
     g.add_argument("--width", type=int, default=d.width)
     g.add_argument("--height", type=int, default=d.height)
