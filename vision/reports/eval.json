@@ -1,0 +1,281 @@
+{
+  "metrics": {
+    "mAP50": 0.4945963979408307,
+    "mAP50-95": 0.3381896788648598,
+    "precision": 0.6202526809365907,
+    "recall": 0.46029364914015275,
+    "per_class_mAP50-95": {
+      "person": 0.32613329953009995,
+      "bicycle": 0.4563101909532121,
+      "car": 0.2972276862718238,
+      "motorcycle": 0.30655327168498203,
+      "bus": 0.5040709177343597,
+      "truck": 0.3163607321614875,
+      "dog": 0.47194564386138627,
+      "stairs": 0.20368826610626584,
+      "sign": 0.33796932090417625,
+      "traffic light": 0.08445704731473005,
+      "pole": 0.18320235077374358,
+      "manhole": 0.691894312405882,
+      "tree": 0.39111671098545986,
+      "railing": 0.4252838427208335,
+      "crosswalk": 0.3411797609571342,
+      "bench": 0.20823909898412696,
+      "traffic cone": 0.4796349380313988,
+      "fire hydrant": 0.6127632039979208,
+      "trash bin": 0.27563758937624766,
+      "potted plant": 0.13527912166745676,
+      "utility box": 0.6856662061438005,
+      "chair": 0.2121792252768006,
+      "bike rack": 0.12641860865036914,
+      "table": 0.26466566881741393,
+      "sofa": 0.21722646407398788,
+      "bed": 0.3096432091891693,
+      "toilet": 0.418963628763109,
+      "tv": 0.3839117072921145,
+      "suitcase": 0.13987866245144284
+    }
+  },
+  "summary": {
+    "images": 300,
+    "objects": 876,
+    "vantage_found": 349,
+    "stock_found": 363,
+    "vantage_recall": 0.3984018264840183,
+    "stock_recall": 0.4143835616438356
+  },
+  "classes": [
+    {
+      "class": "person",
+      "tier": "obstacle",
+      "objects": 251,
+      "vantage_recall": 0.5657370517928287,
+      "stock_recall": 0.6812749003984063,
+      "stock_knows_class": true
+    },
+    {
+      "class": "bicycle",
+      "tier": "moving",
+      "objects": 12,
+      "vantage_recall": 0.25,
+      "stock_recall": 0.25,
+      "stock_knows_class": true
+    },
+    {
+      "class": "car",
+      "tier": "moving",
+      "objects": 64,
+      "vantage_recall": 0.375,
+      "stock_recall": 0.5625,
+      "stock_knows_class": true
+    },
+    {
+      "class": "motorcycle",
+      "tier": "moving",
+      "objects": 14,
+      "vantage_recall": 0.0,
+      "stock_recall": 0.07142857142857142,
+      "stock_knows_class": true
+    },
+    {
+      "class": "bus",
+      "tier": "moving",
+      "objects": 10,
+      "vantage_recall": 0.7,
+      "stock_recall": 0.7,
+      "stock_knows_class": true
+    },
+    {
+      "class": "truck",
+      "tier": "moving",
+      "objects": 15,
+      "vantage_recall": 0.3333333333333333,
+      "stock_recall": 0.26666666666666666,
+      "stock_knows_class": true
+    },
+    {
+      "class": "dog",
+      "tier": "obstacle",
+      "objects": 2,
+      "vantage_recall": 0.5,
+      "stock_recall": 0.5,
+      "stock_knows_class": true
+    },
+    {
+      "class": "stairs",
+      "tier": "drop-off",
+      "objects": 37,
+      "vantage_recall": 0.43243243243243246,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "sign",
+      "tier": "landmark",
+      "objects": 16,
+      "vantage_recall": 0.4375,
+      "stock_recall": 0.3125,
+      "stock_knows_class": true
+    },
+    {
+      "class": "traffic light",
+      "tier": "landmark",
+      "objects": 32,
+      "vantage_recall": 0.125,
+      "stock_recall": 0.3125,
+      "stock_knows_class": true
+    },
+    {
+      "class": "pole",
+      "tier": "obstacle",
+      "objects": 6,
+      "vantage_recall": 0.3333333333333333,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "manhole",
+      "tier": "drop-off",
+      "objects": 31,
+      "vantage_recall": 0.6451612903225806,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "tree",
+      "tier": "obstacle",
+      "objects": 21,
+      "vantage_recall": 0.38095238095238093,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "railing",
+      "tier": "obstacle",
+      "objects": 8,
+      "vantage_recall": 0.625,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "crosswalk",
+      "tier": "landmark",
+      "objects": 32,
+      "vantage_recall": 0.40625,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "bench",
+      "tier": "obstacle",
+      "objects": 25,
+      "vantage_recall": 0.2,
+      "stock_recall": 0.24,
+      "stock_knows_class": true
+    },
+    {
+      "class": "traffic cone",
+      "tier": "obstacle",
+      "objects": 4,
+      "vantage_recall": 0.75,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "fire hydrant",
+      "tier": "obstacle",
+      "objects": 7,
+      "vantage_recall": 0.7142857142857143,
+      "stock_recall": 0.8571428571428571,
+      "stock_knows_class": true
+    },
+    {
+      "class": "trash bin",
+      "tier": "obstacle",
+      "objects": 7,
+      "vantage_recall": 0.8571428571428571,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "potted plant",
+      "tier": "obstacle",
+      "objects": 34,
+      "vantage_recall": 0.11764705882352941,
+      "stock_recall": 0.4117647058823529,
+      "stock_knows_class": true
+    },
+    {
+      "class": "utility box",
+      "tier": "obstacle",
+      "objects": 9,
+      "vantage_recall": 0.4444444444444444,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "chair",
+      "tier": "obstacle",
+      "objects": 134,
+      "vantage_recall": 0.208955223880597,
+      "stock_recall": 0.3582089552238806,
+      "stock_knows_class": true
+    },
+    {
+      "class": "bike rack",
+      "tier": "obstacle",
+      "objects": 2,
+      "vantage_recall": 0.0,
+      "stock_recall": 0.0,
+      "stock_knows_class": false
+    },
+    {
+      "class": "table",
+      "tier": "obstacle",
+      "objects": 32,
+      "vantage_recall": 0.46875,
+      "stock_recall": 0.53125,
+      "stock_knows_class": true
+    },
+    {
+      "class": "sofa",
+      "tier": "obstacle",
+      "objects": 13,
+      "vantage_recall": 0.07692307692307693,
+      "stock_recall": 0.5384615384615384,
+      "stock_knows_class": true
+    },
+    {
+      "class": "bed",
+      "tier": "obstacle",
+      "objects": 9,
+      "vantage_recall": 0.2222222222222222,
+      "stock_recall": 0.4444444444444444,
+      "stock_knows_class": true
+    },
+    {
+      "class": "toilet",
+      "tier": "landmark",
+      "objects": 17,
+      "vantage_recall": 0.29411764705882354,
+      "stock_recall": 0.4117647058823529,
+      "stock_knows_class": true
+    },
+    {
+      "class": "tv",
+      "tier": "landmark",
+      "objects": 28,
+      "vantage_recall": 0.5,
+      "stock_recall": 0.5714285714285714,
+      "stock_knows_class": true
+    },
+    {
+      "class": "suitcase",
+      "tier": "obstacle",
+      "objects": 4,
+      "vantage_recall": 0.0,
+      "stock_recall": 0.0,
+      "stock_knows_class": true
+    }
+  ]
+}

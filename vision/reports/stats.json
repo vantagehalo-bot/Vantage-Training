@@ -1,0 +1,113 @@
+{
+  "train": {
+    "images": {
+      "rod": 12473,
+      "coco": 4020
+    },
+    "boxes": {
+      "person": 13594,
+      "bicycle": 405,
+      "car": 4763,
+      "motorcycle": 511,
+      "bus": 983,
+      "truck": 665,
+      "dog": 476,
+      "stairs": 746,
+      "sign": 449,
+      "traffic light": 1192,
+      "pole": 123,
+      "manhole": 1444,
+      "tree": 658,
+      "railing": 949,
+      "crosswalk": 1576,
+      "bench": 1535,
+      "traffic cone": 644,
+      "fire hydrant": 223,
+      "trash bin": 760,
+      "potted plant": 1289,
+      "utility box": 396,
+      "chair": 5106,
+      "bike rack": 158,
+      "table": 1499,
+      "sofa": 531,
+      "bed": 436,
+      "toilet": 439,
+      "tv": 528,
+      "suitcase": 677
+    }
+  },
+  "val": {
+    "images": {
+      "rod": 1500,
+      "coco": 880
+    },
+    "boxes": {
+      "person": 2700,
+      "bicycle": 82,
+      "car": 703,
+      "motorcycle": 102,
+      "bus": 217,
+      "truck": 111,
+      "dog": 58,
+      "stairs": 67,
+      "sign": 45,
+      "traffic light": 291,
+      "pole": 19,
+      "manhole": 175,
+      "tree": 84,
+      "railing": 112,
+      "crosswalk": 182,
+      "bench": 311,
+      "traffic cone": 100,
+      "fire hydrant": 38,
+      "trash bin": 79,
+      "potted plant": 205,
+      "utility box": 54,
+      "chair": 1025,
+      "bike rack": 12,
+      "table": 348,
+      "sofa": 117,
+      "bed": 81,
+      "toilet": 83,
+      "tv": 136,
+      "suitcase": 129
+    }
+  },
+  "test": {
+    "images": {
+      "rod": 1629,
+      "coco": 893
+    },
+    "boxes": {
+      "person": 2252,
+      "bicycle": 83,
+      "car": 678,
+      "motorcycle": 73,
+      "bus": 91,
+      "truck": 104,
+      "dog": 74,
+      "stairs": 223,
+      "sign": 112,
+      "traffic light": 337,
+      "pole": 42,
+      "manhole": 242,
+      "tree": 150,
+      "railing": 69,
+      "crosswalk": 189,
+      "bench": 216,
+      "traffic cone": 111,
+      "fire hydrant": 38,
+      "trash bin": 45,
+      "potted plant": 232,
+      "utility box": 34,
+      "chair": 1072,
+      "bike rack": 36,
+      "table": 347,
+      "sofa": 144,
+      "bed": 82,
+      "toilet": 96,
+      "tv": 152,
+      "suitcase": 170
+    }
+  }
+}
