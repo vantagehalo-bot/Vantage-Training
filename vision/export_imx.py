@@ -33,6 +33,8 @@ def main() -> int:
     ap.add_argument("--data", default=str(HERE / "datasets" / "vantage" / "data.yaml"),
                     help="calibration images for 8-bit quantisation")
     ap.add_argument("--imgsz", type=int, default=640)
+    ap.add_argument("--calib-fraction", type=float, default=0.12,
+                    help="share of the val images used to calibrate 8-bit quantisation (~300 is plenty)")
     ap.add_argument("--skip-imx", action="store_true", help="only export ONNX")
     args = ap.parse_args()
 
@@ -51,7 +53,8 @@ def main() -> int:
         return 1
     # nms=True puts box decoding + non-max suppression into the network, so the camera
     # outputs final boxes/scores/classes - exactly what vantage_core.py expects.
-    out = model.export(format="imx", imgsz=args.imgsz, data=args.data, int8=True, nms=True)
+    out = model.export(format="imx", imgsz=args.imgsz, data=args.data, int8=True, nms=True,
+                       fraction=args.calib_fraction)
     out = Path(out)
     labels = out / "labels.txt"
     if not labels.exists():
