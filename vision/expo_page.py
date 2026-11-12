@@ -242,8 +242,8 @@ footer { padding-block: 30px 50px; color: var(--muted); font-size: 0.88rem; bord
   stairs, a manhole, a pole or a traffic cone. We built a dataset, trained our own detector, and turned its output into one
   short spoken sentence.</p>
   <div class="stats">
-    <div class="stat hl"><b>{{OURS}}</b><span>of obstacles found in unseen test photos (stock model: {{STOCK}})</span></div>
-    <div class="stat"><b>{{N_NEW}}</b><span>hazard types the stock model cannot detect at all; ours finds {{NEW_RECALL}} of them</span></div>
+    <div class="stat hl"><b>{{NEW_RECALL}}</b><span>of stairs, manholes, poles, cones and other hazards found in unseen photos. Stock model: 0%</span></div>
+    <div class="stat"><b>{{N_NEW}}</b><span>hazard types the stock camera model cannot detect at all</span></div>
     <div class="stat"><b>{{N_IMAGES}}</b><span>labelled photos merged into {{N_CLASSES}} Vantage classes</span></div>
   </div>
 </header>
