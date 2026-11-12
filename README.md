@@ -375,6 +375,24 @@ python3 vantage_proximity.py --min-duty 0.45         # if the motor doesn't star
 python3 vantage_proximity.py --simulate              # no hardware needed
 ```
 
+## 6. Our own trained vision model (`vision/`)
+
+The stock AI Camera model has never seen stairs, manholes, poles or traffic cones. `vision/`
+builds a 29-class obstacle dataset (ROD street obstacles + COCO indoor objects), fine-tunes
+YOLO11n on it, compares it with the stock model, exports it for the IMX500, and includes
+a laptop demo for the expo. See [vision/README.md](vision/README.md).
+
+```bash
+pip install ultralytics gradio
+python vision/demo_app.py              # expo demo at http://localhost:7860
+```
+
+On the Pi, run the trained model inside the normal app:
+```bash
+python3 vantage_core.py --model vision/models/vantage_rpk/network.rpk \
+    --labels vision/models/vantage_imx_model/labels.txt --bbox-normalization --bbox-order xy
+```
+
 ## Troubleshooting
 
 | Symptom | Fix |
