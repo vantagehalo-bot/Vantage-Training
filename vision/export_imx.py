@@ -53,9 +53,18 @@ def main() -> int:
         return 1
     # nms=True puts box decoding + non-max suppression into the network, so the camera
     # outputs final boxes/scores/classes - exactly what vantage_core.py expects.
-    out = model.export(format="imx", imgsz=args.imgsz, data=args.data, int8=True, nms=True,
-                       fraction=args.calib_fraction)
-    out = Path(out)
+    try:
+        out = Path(model.export(format="imx", imgsz=args.imgsz, data=args.data, int8=True, nms=True,
+                                fraction=args.calib_fraction))
+    except Exception as e:  # Sony's Java compiler is often OOM-killed while Python still holds the model
+        out = w.parent / f"{w.stem}_imx_model"
+        if not (out / "model_imx.onnx").exists():
+            raise
+        print(f"IMX compile step failed ({e}); retrying it on its own...")
+        import subprocess
+        conv = Path(sys.executable).parent / "imxconv-pt"
+        subprocess.run([str(conv), "-i", str(out / "model_imx.onnx"), "-o", str(out),
+                        "--no-input-persistency", "--overwrite-output"], check=True)
     labels = out / "labels.txt"
     if not labels.exists():
         labels.write_text("\n".join(model.names[i] for i in sorted(model.names)) + "\n")

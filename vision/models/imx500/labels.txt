@@ -1,0 +1,29 @@
+person
+bicycle
+car
+motorcycle
+bus
+truck
+dog
+stairs
+sign
+traffic light
+pole
+manhole
+tree
+railing
+crosswalk
+bench
+traffic cone
+fire hydrant
+trash bin
+potted plant
+utility box
+chair
+bike rack
+table
+sofa
+bed
+toilet
+tv
+suitcase
