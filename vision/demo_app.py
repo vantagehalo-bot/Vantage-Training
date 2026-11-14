@@ -360,8 +360,9 @@ def results_html(reports: Path, run: Path, dataset_stats: Path | None) -> str:
     new = [r for r in rows if not r["stock_knows_class"]]
     new_rec = sum(r["vantage_recall"] * r["objects"] for r in new) / max(1, sum(r["objects"] for r in new))
     curve = ""
-    if (run / "results.csv").exists():
-        with open(run / "results.csv") as fh:
+    csv_path = run / "results.csv" if (run / "results.csv").exists() else reports / "results.csv"
+    if csv_path.exists():
+        with open(csv_path) as fh:
             pts = [{k.strip(): v for k, v in r.items()} for r in csv.DictReader(fh)]
         curve = curve_svg(pts) if len(pts) >= 2 else \
             f"<p class='note'>Training in progress: {len(pts)} epoch(s) done so far. Restart the demo to refresh.</p>"
